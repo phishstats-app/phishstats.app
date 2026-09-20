@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#15121c">
+<title>Show · Phish.net local cache</title>
+<link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/icon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link rel="manifest" href="/assets/manifest.json">
+<meta name="apple-mobile-web-app-title" content="Phish">
+<meta name="application-name" content="Phish stats">
+<link rel="stylesheet" href="/assets/app.css">
+<style>
+  .nav { display: flex; justify-content: space-between; gap: 8px; margin-top: 14px; font-size: .84rem; }
+  .nav a { color: var(--ink-dim); padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+  .nav a:hover { color: var(--ink); border-color: var(--ink-dim); }
+  .title .links { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .82rem; }
+  .title .links a { color: var(--ink-dim); border-bottom: 1px solid var(--line); }
+  .title .links a:hover { color: var(--ink); }
+  .title .by a { color: var(--ink); font-weight: 500; }
+  .title .by a:hover { color: var(--blue); }
+
+  .notable { list-style: none; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .notable li { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; padding: 12px 14px; background: var(--surface); border-bottom: 1px solid var(--line); align-items: baseline; }
+  .notable li:last-child { border-bottom: 0; }
+  .notable .tag { font: 500 .7rem var(--mono); letter-spacing: .06em; text-transform: uppercase; padding: 3px 7px; border-radius: 5px; background: var(--surface-2); color: var(--ink-dim); white-space: nowrap; }
+  .notable .tag.hot { background: rgba(228,87,46,.18); color: var(--red); }
+  .notable .tag.gold { background: rgba(240,182,64,.16); color: var(--gold); }
+  .notable .tag.green { background: rgba(124,207,138,.14); color: var(--green); }
+  .notable .tag.cool { background: rgba(124,155,224,.14); color: var(--blue); }
+  .notable .what { font-size: .95rem; }
+  .notable .what a { font-weight: 500; }
+  .notable .what a:hover { color: var(--blue); }
+  .notable .why { grid-column: 2; font-size: .84rem; color: var(--ink-dim); }
+  .notable .why a { color: var(--blue); }
+
+  .setblock { margin-top: 16px; }
+  .setblock .sethead { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 0 2px 6px; font-family: var(--mono); font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); }
+  .setblock .sethead b { color: var(--ink-dim); font-weight: 500; letter-spacing: 0; text-transform: none; font-size: .78rem; }
+  .setlist { list-style: none; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .setlist li { display: grid; grid-template-columns: 1fr auto auto; gap: 2px 12px; padding: 9px 14px; background: var(--surface); border-bottom: 1px solid var(--line); align-items: baseline; }
+  .setlist li:last-child { border-bottom: 0; }
+  .setlist li.mark { background: var(--surface-2); }
+  .setlist .song { min-width: 0; }
+  .setlist .song a { font-weight: 500; }
+  .setlist .song a:hover { color: var(--blue); }
+  .setlist .song .tm { font-family: var(--mono); color: var(--red); margin-left: 6px; }
+  .setlist .song .cover { color: var(--ink-faint); font-size: .8rem; margin-left: 6px; }
+  .setlist .gap { font-family: var(--mono); font-size: .78rem; color: var(--ink-dim); white-space: nowrap; }
+  .setlist .gap.hot { color: var(--red); font-weight: 500; }
+  .setlist .len { font-family: var(--mono); font-size: .84rem; color: var(--green); font-weight: 500; white-space: nowrap; text-align: right; min-width: 4.5em; }
+  .setlist .len small { font-weight: 400; opacity: .7; margin-left: 3px; font-size: .68rem; }
+  .setlist .len.approx { color: var(--gold); }
+  .setlist .len.none { color: var(--ink-faint); font-weight: 400; }
+  .setlist .flags { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 10px; font-family: var(--mono); font-size: .72rem; color: var(--ink-faint); }
+  .setlist .flags .jc { color: var(--gold); }
+  .setlist .flags .rec { color: var(--green); }
+  .setlist .flags .bo { color: var(--red); }
+  .setlist .foot { grid-column: 1 / -1; font-size: .82rem; color: var(--ink-dim); font-style: italic; }
+  .notes { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; font-size: .92rem; line-height: 1.55; }
+  .notes a { color: var(--blue); }
+
+  .origin { list-style: none; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .origin li { display: grid; grid-template-columns: minmax(0, 13em) 1fr auto; gap: 3px 12px; align-items: center; padding: 9px 14px; background: var(--surface); border-bottom: 1px solid var(--line); }
+  .origin li:last-child { border-bottom: 0; }
+  .origin .who { font-size: .9rem; font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .origin li.cover .who, .origin li.unc .who { color: var(--ink-dim); font-weight: 400; }
+  .origin .bar { height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+  .origin .bar i { display: block; height: 100%; background: var(--green); border-radius: 999px; }
+  .origin li.cover .bar i { background: var(--blue); }
+  .origin li.unc .bar i { background: var(--ink-faint); }
+  .origin .n { font-family: var(--mono); font-size: .84rem; color: var(--ink-dim); }
+  .origin .songs { grid-column: 1 / -1; font-size: .8rem; color: var(--ink-faint); line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="topbar">
+    <a class="brand" href="/song" title="Home: a fresh landing page">Phish stats<img src="/assets/icon.svg" alt="" width="24" height="24"></a>
+    <nav class="crumbs" id="crumbs" aria-label="Breadcrumb"></nav>
+    <nav class="quick" aria-label="Quick links"><a class="home" href="/song">Home</a><a href="/show/latest">Latest<span class="long"> show</span></a><a href="/show/random">Random<span class="long"> show</span></a><a href="/eras">Eras</a></nav>
+  </header>
+  <form class="search" role="search" autocomplete="off" id="searchForm">
+    <div class="search-row">
+      <input id="q" type="search" placeholder="Song, venue, city, or date" aria-label="Search" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="search">
+      <button type="button" class="clear" id="clearBtn" aria-label="Clear" hidden>&times;</button>
+      <div class="suggest" id="suggest" role="listbox" hidden></div>
+    </div>
+    <div class="search-hint"><span>Phish shows only, official stats</span><span></span></div>
+  </form>
+
+  <main id="out" aria-live="polite"></main>
+
+  <p class="foot-note">
+    {% include "_compliance.html" %}
+    <br>LP: official LivePhish length · PI: phish.in recording · BS: post to post from the phish.com Bluesky account.
+    
+  </p>
+</div>
+
+<script src="/assets/app.js"></script>
+<script src="/assets/length-notable.js?v=dev"></script>
+<script>
+(function () {
+  'use strict';
+  var P = window.Phish, api = P.api, esc = P.esc, n = P.n, fmtDate = P.fmtDate, longDate = P.longDate, mmss = P.mmss, hmmss = P.hmmss;
+  var out = document.getElementById('out');
+
+  P.mountSearch({ input: document.getElementById('q'), suggest: document.getElementById('suggest'), clear: document.getElementById('clearBtn') });
+
+  // /show/latest and /show/random are resolved by the server, which sends a
+  // 302 to the real date, so this page only ever loads with one.
+  var DATE = decodeURIComponent(location.pathname.split('/').pop());
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(DATE)) { out.innerHTML = P.errorState(new Error('Expected /show/YYYY-MM-DD'), 'Not a show date'); return; }
+
+  out.innerHTML = '<div class="state"><h1>' + esc(longDate(DATE)) + '</h1><p>Pulling the show…</p></div>';
+  // The tour list rides along with the show's own queries so the eyebrow's
+  // tour name is a link on the first paint rather than after a second one.
+  // If it fails the name still renders, as plain text.
+  var tours = null;
+  // landing/history is the same statement the song page's "today in history"
+  // panel runs: every show on this month and day, any year, newest first. It
+  // has no cutoff, so a show in 1994 sees the 2019 one too.
+  Promise.all([api('show/core', { d: DATE }), api('show/setlist', { d: DATE }), api('show/set-starts', { d: DATE }), P.loadTours().catch(function () { return null; }), api('landing/history', { md: DATE.slice(5) }).catch(function () { return []; })])
+    .then(function (res) { tours = res[3]; render(res[0][0], res[1], res[2], res[4]); })
+    .catch(function (e) { out.innerHTML = P.errorState(e); });
+
+  // Who wrote the night. phish.net credits every song to an artist, so the
+  // setlist rows already carry this - no extra request, no new statement.
+  // Three kinds of row: the band's own (Phish plus the members' side projects,
+  // which P.isCover already treats as theirs), covers, and the handful of
+  // early songs phish.net carries with no credit at all. Those are left
+  // "Uncredited" rather than assumed to be originals.
+  function originGroups(rows) {
+    var by = {}, order = [];
+    rows.forEach(function (r) {
+      var credited = r.artist && String(r.artist).trim();
+      var who = credited || 'Uncredited';
+      if (!by[who]) { by[who] = { who: who, cover: P.isCover(r.artist), unc: !credited, songs: [] }; order.push(who); }
+      by[who].songs.push(r.song);
+    });
+    return order.map(function (k) { return by[k]; }).sort(function (a, b) {
+      // Phish first, then the side projects, then covers, then uncredited;
+      // within each, the biggest share first.
+      var rank = function (g) { return g.who === 'Phish' ? 0 : g.unc ? 3 : g.cover ? 2 : 1; };
+      return rank(a) - rank(b) || b.songs.length - a.songs.length || a.who.localeCompare(b.who);
+    });
+  }
+  function originBlock(rows) {
+    if (!rows.length) return '';
+    var groups = originGroups(rows);
+    var covers = rows.filter(function (r) { return P.isCover(r.artist); }).length;
+    var own = rows.length - covers;
+    var sub = covers
+      ? n(own) + ' the band’s own · ' + n(covers) + (covers === 1 ? ' cover' : ' covers')
+      : 'all ' + n(rows.length) + ' the band’s own';
+    return '<section class="sec"><div class="head"><h2>Song origins</h2><span>' + sub + '</span></div><ol class="origin">' +
+      groups.map(function (g) {
+        var pct = (g.songs.length / rows.length) * 100;
+        return '<li class="' + (g.unc ? 'unc' : g.cover ? 'cover' : 'own') + '">' +
+          '<span class="who">' + esc(g.who) + '</span>' +
+          '<span class="bar"><i style="width:' + pct.toFixed(1) + '%"></i></span>' +
+          '<span class="n">' + n(g.songs.length) + '</span>' +
+          (g.who === 'Phish' ? '' : '<span class="songs">' + g.songs.map(esc).join(' · ') + '</span>') +
+          '</li>';
+      }).join('') +
+      '</ol></section>';
+  }
+
+  function segName(label) { return label === 'e' ? 'Encore' : /^e\d/.test(label) ? 'Encore ' + label.slice(1) : 'Set ' + label; }
+  function lenCell(r) {
+    if (r.ms) return '<span class="len">' + mmss(r.ms) + '<small>' + esc(r.source) + '</small></span>';
+    if (r.approx_seconds) return '<span class="len approx">≈' + P.approxMin(r.approx_seconds) + '<small>BS</small></span>';
+    if (r.tracktime) return '<span class="len">' + esc(r.tracktime) + '<small>PN</small></span>';
+    return '<span class="len none">–</span>';
+  }
+
+  // The rules. Each returns nothing or a { tag, cls, what, why, weight } item;
+  // heavier weights sort first. Thresholds follow common phish.net usage.
+  function notables(core, rows) {
+    var items = [];
+    var songLink = function (r) { return '<a href="' + P.songPage(r.song) + '">' + esc(r.song) + '</a>'; };
+    rows.forEach(function (r) {
+      var gap = Number(r.gap || 0), prior = Number(r.prior_plays || 0);
+      // Debuts and near-debuts.
+      if (r.debut === core.showdate) {
+        var cover = P.isCover(r.artist);
+        items.push({ tag: cover ? 'Cover debut' : 'Debut', cls: 'green', weight: 90, what: songLink(r), why: cover ? 'First time Phish has played it. Originally by ' + esc(r.artist) + '.' : 'First time ever played.' });
+      } else if (prior > 0 && prior < 10) {
+        items.push({ tag: P.ordinal(prior + 1) + ' time', cls: 'green', weight: 60, what: songLink(r), why: 'Only ' + n(prior) + ' previous performance' + (prior === 1 ? '' : 's') + ', first on ' + fmtDate(r.debut) + '.' });
+      }
+      // Bustouts. phish.net stores a debut's gap as the shows since the band's
+      // first show, so a first performance is not a gap: require a previous one.
+      if (gap >= 50 && r.prev_played) {
+        var yrs = P.yearsBetween(r.prev_played, core.showdate);
+        items.push({ tag: gap >= 250 ? 'Historic bustout' : gap >= 100 ? 'Major bustout' : 'Bustout', cls: 'hot', weight: 100 + Math.min(gap, 1000) / 10,
+          what: songLink(r), why: n(gap) + '-show gap: first since <a href="' + P.showPage(r.prev_played) + '">' + fmtDate(r.prev_played) + '</a>' + (yrs >= 1 ? ', ' + (Math.round(yrs * 10) / 10) + ' years' : '') + '.' });
+      }
+      // Length records, ranked against every single-song recording of the
+      // song. The classification is in assets/length-notable.js so it can be
+      // tested; what it never reports is the all-time record, which these rows
+      // do not carry — see the note there.
+      var ls = P.lengthStanding(r);
+      if (ls) {
+        var beat = 'beating ' + mmss(ls.prevMs) + ' from <a href="' + P.showPage(ls.prevDate) + '">' + fmtDate(ls.prevDate) + '</a>';
+        var standing = '#' + ls.rank + ' of ' + n(ls.count) + ' recorded versions.';
+        if (ls.kind === 'record') {
+          items.push({ tag: 'Longest ever', cls: 'gold', weight: 95, what: songLink(r) + ' · ' + mmss(r.ms),
+            why: ls.prevMs ? 'Previous record ' + mmss(ls.prevMs) + ' on <a href="' + P.showPage(ls.prevDate) + '">' + fmtDate(ls.prevDate) + '</a>, of ' + n(ls.count) + ' recorded versions.' : 'Of ' + n(ls.count) + ' recorded versions.' });
+        } else if (ls.kind === 'former') {
+          // The interesting fact about a dethroned version is that it held the
+          // record at all, so it outranks a version that never did.
+          items.push({ tag: 'Was the longest', cls: 'gold', weight: 75, what: songLink(r) + ' · ' + mmss(r.ms),
+            why: 'Longest ever when played, ' + beat + '. Since surpassed: ' + standing });
+        } else {
+          items.push({ tag: ls.rank <= 5 ? '#' + ls.rank + ' longest' : 'top 10 length', cls: 'gold',
+            weight: ls.rank <= 5 ? 70 : 40, what: songLink(r) + ' · ' + mmss(r.ms), why: standing });
+        }
+      }
+      // Jam chart.
+      if (r.is_jamchart) {
+        items.push({ tag: 'Jam chart', cls: 'gold', weight: 50, what: songLink(r), why: r.jamchart_description ? P.safeNote(r.jamchart_description) : 'Flagged as a notable version on phish.net.' });
+      }
+      // Venue and slot firsts, only for songs with a real history.
+      if (prior >= 20 && Number(r.prior_here) === 0 && core.venue_total >= 10) {
+        items.push({ tag: 'Venue first', cls: 'cool', weight: 45, what: songLink(r), why: 'First time at ' + esc(core.venue) + ', in its ' + P.ordinal(core.venue_nth) + ' Phish show.' });
+      }
+      if (prior >= 20 && Number(r.position) === 1 && Number(r.prior_opens) === 0) {
+        items.push({ tag: 'First as opener', cls: 'cool', weight: 42, what: songLink(r), why: 'Never opened a show before, in ' + n(prior) + ' prior plays.' });
+      }
+      if (prior >= 20 && /^e/.test(String(r.set_label)) && Number(r.prior_encores) === 0) {
+        items.push({ tag: 'First as encore', cls: 'cool', weight: 42, what: songLink(r), why: 'Never been an encore before, in ' + n(prior) + ' prior plays.' });
+      }
+    });
+    // Longest segue chain of the night.
+    var best = [], cur = [];
+    rows.forEach(function (r, i) {
+      cur.push(r);
+      var joined = Number(r.transition) === 2 || Number(r.transition) === 3;
+      var next = rows[i + 1];
+      if (!joined || !next || next.set_label !== r.set_label) { if (cur.length > best.length) best = cur; cur = []; }
+    });
+    if (best.length >= 3) {
+      var chainMs = best.reduce(function (a, r) { return r.ms ? a + Number(r.ms) : a; }, 0), allTimed = best.every(function (r) { return r.ms; });
+      items.push({ tag: best.length + '-song segue', cls: 'cool', weight: 55,
+        what: best.map(function (r, i) { return songLink(r) + (i < best.length - 1 ? ' <span class="tm">' + esc(String(r.trans_mark || '>').trim()) + '</span> ' : ''); }).join(''),
+        why: allTimed ? 'Unbroken for ' + hmmss(chainMs) + '.' : 'Unbroken, in ' + segName(best[0].set_label).toLowerCase() + '.' });
+    }
+    return items.sort(function (a, b) { return b.weight - a.weight; });
+  }
+
+  // Every other show on this month and day, in either direction. Matching on
+  // showid rather than showdate keeps the sibling of a two-show day: the two
+  // Key Club sets on 5/19/00 are separate shows sharing one date.
+  function historyBlock(core, history) {
+    var others = (history || []).filter(function (r) { return Number(r.showid) !== Number(core.showid); });
+    if (!others.length) return '';
+    var year = Number(String(core.showdate).slice(0, 4));
+    var day = new Date(core.showdate + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+    return '<section class="sec"><div class="head"><h2>This day in Phish history</h2>' +
+      '<span>' + n(others.length) + ' other show' + (others.length === 1 ? '' : 's') + ' on ' + esc(day) + '</span></div>' +
+      '<ol class="perf">' + others.map(function (r) {
+        var away = Number(String(r.showdate).slice(0, 4)) - year;
+        var when = away === 0 ? 'same day'
+          : Math.abs(away) + (Math.abs(away) === 1 ? ' year ' : ' years ') + (away < 0 ? 'earlier' : 'later');
+        return '<li><a class="date" href="' + P.showPage(r.showdate) + '">' + fmtDate(r.showdate) + '</a>' +
+          '<span class="venue">' + esc(r.venue) + ' · ' + esc(r.city) + (r.state ? ', ' + esc(r.state) : '') + '</span>' +
+          '<span class="gap">' + esc(when) + '</span></li>';
+      }).join('') + '</ol></section>';
+  }
+
+  function render(core, rows, starts, history) {
+    if (!core) { out.innerHTML = '<div class="state"><h1>No Phish show on ' + esc(longDate(DATE)) + '</h1><p>Try the date search for the nearest one.</p></div>'; return; }
+    document.title = fmtDate(core.showdate) + ' ' + core.venue + ' · Phish.net local cache';
+    P.crumbs([{ text: core.city + (core.state ? ', ' + core.state : ''), href: P.cityPage(core.city, core.state) }, { text: core.venue, href: P.venuePage(core.venueid) }, { text: fmtDate(core.showdate) }]);
+    var items = notables(core, rows);
+    var startBy = {}; starts.forEach(function (s) { startBy[s.set_label] = s.set_started_local; });
+    var sets = []; rows.forEach(function (r) { var s = sets[sets.length - 1]; if (!s || s.label !== r.set_label) { s = { label: r.set_label, rows: [] }; sets.push(s); } s.rows.push(r); });
+    var longest = rows.filter(function (r) { return r.ms; }).sort(function (a, b) { return b.ms - a.ms; })[0];
+    var timed = rows.filter(function (r) { return r.ms; }).length;
+    var recSource = core.livephish_url ? 'LivePhish' : core.phishin_tracks ? 'phish.in' : null;
+
+    var html =
+      '<div class="nav">' +
+        (core.prev_date ? '<a href="' + P.showPage(core.prev_date) + '">← ' + fmtDate(core.prev_date) + '</a>' : '<span></span>') +
+        (core.next_date ? '<a href="' + P.showPage(core.next_date) + '">' + fmtDate(core.next_date) + ' →</a>' : '<span></span>') +
+      '</div>' +
+      '<article class="song">' +
+      '<header class="title">' +
+        '<div class="eyebrow">' + esc(P.fullDate(core.showdate)) + ' · <a href="/year/' + core.showyear + '">' + core.showyear + '</a>' + (core.tourname && core.tourname !== 'Not Part of a Tour' ? ' · ' + P.tourLink(tours, core.tourname) : '') + '</div>' +
+        '<h1><a href="' + P.venuePage(core.venueid) + '">' + esc(core.venue) + '</a></h1>' +
+        '<div class="by"><a href="' + P.cityPage(core.city, core.state) + '">' + esc(core.city + (core.state ? ', ' + core.state : '')) + '</a>' +
+          ' · Phish’s ' + P.ordinal(core.venue_nth) + ' show here · show #' + n(core.show_nth) + ' overall</div>' +
+        '<div class="links"><a href="' + esc(core.permalink) + '" target="_blank" rel="noopener">phish.net setlist</a>' +
+          (core.phishin_tracks ? '<a href="https://phish.in/' + esc(core.showdate) + '" target="_blank" rel="noopener">listen on phish.in</a>' : '') +
+          (P.livePhishUrl(core.showdate, core.livephish_url) ? '<a href="' + esc(P.livePhishUrl(core.showdate, core.livephish_url)) + '" target="_blank" rel="noopener">official on LivePhish</a>' : '') + '</div>' +
+      '</header>' +
+
+      '<div class="lead">' +
+        '<div class="cell"><div class="num">' + n(rows.length) + '</div><div class="lab">Songs</div><div class="sub">' + n(sets.length) + ' segments</div></div>' +
+        '<div class="cell"><div class="num' + (items.some(function (i) { return i.cls === 'hot'; }) ? ' hot' : '') + '">' + n(items.length) + '</div><div class="lab">Notable</div><div class="sub">' + (items.length ? esc(items[0].tag.toLowerCase()) : 'nothing unusual') + '</div></div>' +
+        '<div class="cell"><div class="num">' + (longest ? mmss(longest.ms) : '–') + '</div><div class="lab">Longest</div><div class="sub">' + (longest ? esc(longest.song) : 'no lengths yet') + '</div></div>' +
+      '</div>' +
+
+      (items.length ? '<section class="sec"><div class="head"><h2>Notable</h2><span>' + n(items.length) + ' from the data, no editorializing</span></div><ol class="notable">' +
+        items.map(function (i) { return '<li><span class="tag ' + i.cls + '">' + esc(i.tag) + '</span><span class="what">' + i.what + '</span><span class="why">' + i.why + '</span></li>'; }).join('') +
+        '</ol></section>' : '') +
+
+      '<section class="sec"><div class="head"><h2>Setlist</h2><span>' + (timed ? n(timed) + ' of ' + n(rows.length) + ' timed' + (recSource ? ', ' + recSource : '') : 'no lengths yet') + '</span></div>' +
+        sets.map(function (s) {
+          var setMs = s.rows.reduce(function (a, r) { return a + Number(r.ms || 0); }, 0), full = s.rows.every(function (r) { return r.ms; });
+          return '<div class="setblock"><div class="sethead"><span>' + esc(segName(s.label)) + (startBy[s.label] ? ' <b>' + esc(startBy[s.label]) + '</b>' : '') + '</span>' +
+            '<span>' + n(s.rows.length) + ' songs' + (setMs ? ' · ' + (full ? '' : '≥') + hmmss(setMs) : '') + '</span></div>' +
+            '<ol class="setlist">' + s.rows.map(setRow).join('') + '</ol></div>';
+        }).join('') +
+      '</section>' +
+
+      (core.setlistnotes ? '<section class="sec"><div class="head"><h2>Show notes</h2><span>phish.net</span></div><div class="notes">' + P.safeNote(core.setlistnotes) + '</div></section>' : '') +
+      originBlock(rows) +
+      historyBlock(core, history) +
+      '</article>';
+    out.innerHTML = html;
+  }
+
+  function setRow(r) {
+    // A debut row's gap counts shows since the band's first show; without a
+    // previous performance there is no gap to show.
+    var gap = r.prev_played ? Number(r.gap || 0) : 0;
+    var flags = [];
+    if (r.debut === DATE) flags.push('<span class="rec">debut</span>');
+    if (r.is_jamchart) flags.push('<span class="jc">jam chart</span>');
+    if (r.ms && r.cnt >= 3 && r.rnk <= 5) flags.push('<span class="rec">#' + r.rnk + ' longest of ' + n(r.cnt) + '</span>');
+    if (gap >= 50) flags.push('<span class="bo">first since ' + fmtDate(r.prev_played) + '</span>');
+    return '<li' + (gap >= 50 || r.debut === DATE ? ' class="mark"' : '') + '>' +
+      '<span class="song"><a href="' + P.songPage(r.song) + '">' + esc(r.song) + '</a>' +
+        (P.isCover(r.artist) ? '<span class="cover">' + esc(r.artist) + '</span>' : '') +
+        (/^(>|->)$/.test(String(r.trans_mark || '').trim()) ? '<span class="tm">' + esc(r.trans_mark.trim()) + '</span>' : '') + '</span>' +
+      '<span class="gap' + (gap >= 50 ? ' hot' : '') + '" title="shows since it was last played">' + (gap ? 'gap ' + n(gap) : '') + '</span>' +
+      lenCell(r) +
+      (flags.length ? '<span class="flags">' + flags.join('') + '</span>' : '') +
+      (r.footnote ? '<span class="foot">' + P.safeNote(r.footnote) + '</span>' : '') +
+    '</li>';
+  }
+})();
+</script>
+</body>
+</html>

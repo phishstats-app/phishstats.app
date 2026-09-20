@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Same drawing as scripts/make-icons.py: a red fish with gold ripples on the site's dark ground. -->
+  <rect width="1024" height="1024" rx="220" fill="#15121c"/>
+  <g fill="none" stroke="#f0b640" stroke-width="22" stroke-linecap="round">
+    <path d="M142.7 471.8 A70 70 0 0 0 142.7 552.2"/>
+    <path d="M97.6 440.3 A125 125 0 0 0 97.6 583.7"/>
+    <path d="M52.6 408.7 A180 180 0 0 0 52.6 615.3"/>
+  </g>
+  <ellipse cx="520" cy="512" rx="270" ry="180" fill="#e4572e"/>
+  <polygon points="730,512 940,335 895,512 940,689" fill="#e4572e"/>
+  <circle cx="372" cy="468" r="40" fill="#f3ecdf"/>
+  <circle cx="384" cy="470" r="17" fill="#15121c"/>
+</svg>

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#15121c">
+<title>About &amp; compliance · Phish stats</title>
+<link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/icon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link rel="manifest" href="/assets/manifest.json">
+<meta name="apple-mobile-web-app-title" content="Phish">
+<meta name="application-name" content="Phish stats">
+<link rel="stylesheet" href="/assets/app.css">
+<style>
+  .about { margin-top: 18px; display: grid; gap: 18px; }
+  .about section { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .about h1 { font: 600 1.6rem/1.2 var(--display); letter-spacing: -.01em; margin: 18px 0 4px; }
+  .about h2 { font: 600 1.05rem/1.3 var(--display); margin-bottom: 8px; }
+  .about p, .about li { font-size: .95rem; color: var(--ink); line-height: 1.55; }
+  .about p + p, .about ul + p, .about p + ul { margin-top: 10px; }
+  .about ul { padding-left: 1.2em; }
+  .about li + li { margin-top: 6px; }
+  .about a { color: var(--blue); border-bottom: 1px solid var(--line); }
+  .about .lede { color: var(--ink-dim); }
+  .about blockquote { margin: 10px 0 0; padding: 12px 14px; border-left: 3px solid var(--gold); background: var(--surface-2); border-radius: 0 10px 10px 0; font-size: .9rem; color: var(--ink-dim); line-height: 1.55; }
+  .about blockquote p + p { margin-top: 8px; }
+  .about .contact { font-family: var(--mono); font-size: .95rem; word-break: break-all; }
+  .about dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 14px; font-size: .92rem; }
+  .about dt { color: var(--ink-dim); }
+  .about dd ul { margin: 4px 0 6px; }
+  .about section:target { border-color: var(--gold); }
+  @media (max-width: 480px) { .about dl { grid-template-columns: 1fr; gap: 2px; } .about dd { margin-bottom: 8px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="topbar">
+    <a class="brand" href="/song" title="Home: a fresh landing page">Phish stats<img src="/assets/icon.svg" alt="" width="24" height="24"></a>
+    <nav class="crumbs" aria-label="Breadcrumb"><span class="here">About</span></nav>
+    <nav class="quick" aria-label="Quick links"><a class="home" href="/song">Home</a><a href="/show/latest">Latest<span class="long"> show</span></a><a href="/show/random">Random<span class="long"> show</span></a><a href="/eras">Eras</a></nav>
+  </header>
+
+  <main class="about">
+    <div>
+      <h1>About this site</h1>
+      <p class="lede">A free, non-commercial fan project: Phish song statistics for people who want to know, in the middle of a show, how long it has been since a song was last played and what that means. Built and run by one fan for the community. It is not affiliated with, operated by, or endorsed by Phish, Phish Inc., their management, Phish.net, The Mockingbird Foundation, phish.in, LivePhish, or nugs.net.</p>
+    </div>
+
+    <section>
+      <h2>What this site is, and is not</h2>
+      <ul>
+        <li>Free to use. Nothing is sold, and there are no accounts or subscriptions.</li>
+        <li>No advertising, no sponsored or compensated links, and no sale or sharing of traffic data.</li>
+        <li>No Phish music, audio, video, lyrics, or photographs. The site shows song titles, dates, venues, running times, and statistics computed from them.</li>
+        <li>Nothing is copied from <a href="https://www.phish.com">phish.com</a>. The live setlist panel uses only the song names and posting times from the band's public Bluesky posts; the text of those posts is not reproduced.</li>
+        <li>The setlist database is not offered for download. Every page links back to the source it draws from.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Data sources and attribution</h2>
+      <dl>
+        <dt>Setlists, shows, songs, gaps</dt>
+        <dd>Courtesy of <a href="https://phish.net">Phish.net</a>, a project of <a href="https://mbird.org">The Mockingbird Foundation</a>, via the Phish.net API v5 under its <a href="https://docs.phish.net/terms-of-use">terms of use</a>, which license non-commercial, attributed use. Phish.net's own show pages are linked from every setlist and performance shown here.</dd>
+        <dt>Recorded song lengths</dt>
+        <dd><a href="https://phish.in">phish.in</a>, a community-run archive of audience recordings, via its public API. Shown with the tag "PI".</dd>
+        <dt>Official song lengths</dt>
+        <dd>The running times printed on <a href="https://www.livephish.com">LivePhish</a> release pages, read once per show from the release page the band links to, and always linked back to that release so you can buy the show. Shown with the tag "LP".</dd>
+        <dt>Live setlists during a show</dt>
+        <dd>Song names and posting times from the public Bluesky posts of <a href="https://bsky.app/profile/phish.com">@phish.com</a>, read through Bluesky's public API. Shown with the tag "BS" for post-to-post timing. Post text is not reproduced.</dd>
+      </dl>
+    </section>
+
+    <section>
+      <h2>Phish fan web site policy</h2>
+      <p>This site voluntarily complies with the Phish fan web site policy at <a href="https://www.phish.com/faq/web-guidelines">https://www.phish.com/faq/web-guidelines</a>.</p>
+      <p>In keeping with that policy, this site agrees to and adopts the Phish Fan Site Statement of Compliance:</p>
+      <blockquote>
+        <p>This site acknowledges and respects Phish's trademarks, copyrights and other proprietary rights, including but not limited to the band's and related enterprises' exclusive ownership of company and band names, Phish music, performances, likenesses, lyrics, copyrighted images and other content. It does not use material derived in whole or in part from official material generated by Phish (from https://www.phish.com or elsewhere), their writers, publishers, management and/or other sources, which is protected by U.S. and international copyright and trademark laws. No material from https://www.phish.com (including but not limited to text, images, performances, audio and/or video) and no software (including but not limited to any images or files incorporated in or generated by the software or data accompanying such software) has been or will be copied, reproduced, republished, uploaded, posted, transmitted or distributed in any way, modified or used for any other purpose without Phish's express written permission. No waiver of any copyright or trademark right is intended.</p>
+      </blockquote>
+      <p>The operator will remove any protected material from this site immediately upon the request of Phish.</p>
+    </section>
+
+    <section>
+      <h2>Trademarks</h2>
+      <p>"Phish" and the Phish fish logo are trademarks of Phish, Inc. The name "Phish stats" is used only to describe what the site is about, and the fish icon on this site is an original drawing that is not the band's logo. Phish.net and The Mockingbird Foundation, phish.in, LivePhish and nugs.net, and Bluesky are trademarks or names of their respective owners. Their use here identifies the source of the data and implies no sponsorship or endorsement.</p>
+    </section>
+
+    <section id="privacy">
+      <h2>Privacy</h2>
+      <p>Short version: this site sets no cookies, has no accounts, runs no analytics or advertising, and does not try to identify you. Here is everything it does touch, and why.</p>
+      <dl>
+        <dt>Cookies</dt>
+        <dd>None. Nothing is set by the site or by anything it loads, which is why there is no cookie banner: there is nothing to consent to.</dd>
+        <dt>Browser storage</dt>
+        <dd>On a show day the landing page shows the weather at the venue. Your browser keeps the venue's map coordinates in its own local storage so they are not looked up twice. That is a city name and a latitude and longitude, nothing about you, and clearing your browser's site data removes it.</dd>
+        <dt>Server logs</dt>
+        <dd>Like every web server, ours records each request: your network address, the time, the page or data asked for, the browser you used, and the page that linked you here. Those lines live in the servers' system journal for 14 days, then age out. They are used only to keep the site working and to block abuse; they are never combined with other data, shared, or sold. The servers are in Oracle Cloud's San Jose, California region.</dd>
+        <dt>Requests your browser makes to others</dt>
+        <dd>
+          <ul>
+            <li><strong>Open-Meteo</strong> answers the show-day weather. The request names the venue's city, not your location (<a href="https://open-meteo.com/en/terms">Open-Meteo's terms</a>).</li>
+            <li><strong>Bluesky</strong> supplies the live setlist during a show: your browser reads the band's public posts from Bluesky's public API (<a href="https://bsky.social/about/support/privacy-policy">Bluesky's privacy policy</a>).</li>
+          </ul>
+          Those two are the only third parties. The typefaces (Fraunces, Work Sans, and IBM Plex Mono, all under the SIL Open Font License) are served from this site, not from Google. Links to Phish.net, phish.in, LivePhish, and other sites are ordinary links; nothing is sent to them until you click.
+        </dd>
+        <dt>Email</dt>
+        <dd>If you write to the address below, the message is kept as long as it takes to deal with it and is not used for anything else.</dd>
+        <dt>Your rights</dt>
+        <dd>There is no account to delete and no profile to export. If you believe the site holds something about you, or you want a log line removed inside the 14 days, write to the address below.</dd>
+        <dt>Children</dt>
+        <dd>The site is not directed at children and collects nothing from anyone, children included.</dd>
+      </dl>
+      <p>This notice was last updated on 2026-09-07. If the site ever starts doing something not listed here, this section will say so first.</p>
+    </section>
+
+    <section>
+      <h2>Takedown and correction requests</h2>
+      <p>If you hold rights in anything shown on this site and want it removed, changed, or credited differently, write to:</p>
+      <p class="contact"><a href="mailto:phishstats.perch752@simplelogin.fr">phishstats.perch752@simplelogin.fr</a></p>
+      <p>Please include the page address, what you want removed or changed, and who you are acting for. Requests from Phish, Phish Inc., their management, The Mockingbird Foundation, phish.in, LivePhish, or nugs.net will be acted on immediately and without argument. The same address works for anyone who spots an error in the data or the attribution.</p>
+    </section>
+
+    <p class="foot-note">
+      {% include "_compliance.html" %}
+      
+    </p>
+  </main>
+</div>
+</body>
+</html>

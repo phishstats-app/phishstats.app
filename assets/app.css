@@ -1,0 +1,402 @@
+/* Shared styles for the Phish.net local cache pages (song, show, venue, city). */
+
+  /* Typefaces, served from /assets/fonts so no visitor talks to Google. The
+     files are Google Fonts' own woff2 builds (all SIL Open Font License):
+     Fraunces and Work Sans as variable fonts, IBM Plex Mono at 400 and 500,
+     Latin and Latin-extended subsets only, with Google's unicode-range splits
+     so a browser fetches only what a page uses. The README says how to
+     refresh them if the families ever change. */
+  /* Fraunces 400 700 latin-ext */
+  @font-face { font-family: 'Fraunces'; font-style: normal; font-weight: 400 700; font-display: swap;
+    src: url(/assets/fonts/fraunces-400-700-latin-ext.woff2) format('woff2');
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+  /* Fraunces 400 700 latin */
+  @font-face { font-family: 'Fraunces'; font-style: normal; font-weight: 400 700; font-display: swap;
+    src: url(/assets/fonts/fraunces-400-700-latin.woff2) format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+  /* IBM Plex Mono 400 latin-ext */
+  @font-face { font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 400; font-display: swap;
+    src: url(/assets/fonts/plexmono-400-latin-ext.woff2) format('woff2');
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+  /* IBM Plex Mono 400 latin */
+  @font-face { font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 400; font-display: swap;
+    src: url(/assets/fonts/plexmono-400-latin.woff2) format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+  /* IBM Plex Mono 500 latin-ext */
+  @font-face { font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 500; font-display: swap;
+    src: url(/assets/fonts/plexmono-500-latin-ext.woff2) format('woff2');
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+  /* IBM Plex Mono 500 latin */
+  @font-face { font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 500; font-display: swap;
+    src: url(/assets/fonts/plexmono-500-latin.woff2) format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+  /* Work Sans 400 600 latin-ext */
+  @font-face { font-family: 'Work Sans'; font-style: normal; font-weight: 400 600; font-display: swap;
+    src: url(/assets/fonts/worksans-400-600-latin-ext.woff2) format('woff2');
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+  /* Work Sans 400 600 latin */
+  @font-face { font-family: 'Work Sans'; font-style: normal; font-weight: 400 600; font-display: swap;
+    src: url(/assets/fonts/worksans-400-600-latin.woff2) format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+
+  :root {
+    --bg: #15121c;
+    --surface: #1f1a2a;
+    --surface-2: #29223a;
+    --line: #35304a;
+    --ink: #f3ecdf;
+    --ink-dim: #a79fb5;
+    --ink-faint: #6f6883;
+    --red: #e4572e;
+    --blue: #7c9be0;
+    --gold: #f0b640;
+    --green: #7ccf8a;
+    --display: 'Fraunces', Georgia, serif;
+    --body: 'Work Sans', system-ui, -apple-system, sans-serif;
+    --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { color-scheme: dark; }
+  body {
+    font-family: var(--body); font-size: 16px; line-height: 1.45;
+    background: var(--bg); color: var(--ink);
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; text-decoration: none; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 4px; }
+
+  /* Phone-first, but on a desktop the column is wider and the grids below
+     flow to two or three columns by available width. Every grid track is
+     minmax(0, 1fr): a bare 1fr has an auto minimum, so one long no-wrap
+     row would force its column wide and squeeze the others. */
+  .wrap { max-width: 640px; margin: 0 auto; padding: 0 16px 48px; }
+  @media (min-width: 900px) { .wrap { max-width: 900px; } }
+
+  /* Top bar: brand (home), breadcrumbs, quick links ---------------------- */
+  .topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 12px 0 2px; }
+  .brand { display: inline-flex; align-items: center; gap: 8px; font: 600 1rem var(--display); color: var(--ink); letter-spacing: -.01em; }
+  .brand img { width: 24px; height: 24px; border-radius: 6px; }
+  .brand:hover { color: var(--red); }
+  .crumbs { flex: 1 1 200px; min-width: 0; display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: .76rem; color: var(--ink-dim); white-space: nowrap; overflow: hidden; }
+  .crumbs:empty { display: none; }   /* the trail is filled by JS, and /song has none */
+  .crumbs a { color: var(--ink-dim); flex: none; }
+  .crumbs a:hover { color: var(--blue); }
+  .crumbs .sep { color: var(--ink-faint); flex: none; }
+  .crumbs .here { color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .quick { display: flex; gap: 8px; margin-left: auto; }
+  .quick a { display: inline-flex; align-items: center; min-height: 32px; font: 500 .8rem var(--body); padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink-dim); white-space: nowrap; }
+  .quick a .long { white-space: pre; }   /* keeps the leading space: flex items drop it otherwise */
+  .quick a:hover, .quick a:focus-visible { color: var(--ink); border-color: var(--ink-dim); outline: none; }
+  .quick a:active { background: var(--surface); }
+  @media (max-width: 560px) {
+    .topbar { gap: 10px 12px; }
+    .crumbs { order: 3; flex-basis: 100%; }
+    .quick a { min-height: 36px; }      /* comfortable thumb target */
+    .quick a.home { display: none; }   /* the brand is the home link on a phone */
+    .quick a .long { display: none; }  /* "Latest" and "Random" fit beside the brand on one row */
+  }
+
+  /* Search ------------------------------------------------------------- */
+  .search { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 14px 0 10px; }
+  .search-row { position: relative; }
+  .search input {
+    width: 100%; padding: 14px 44px 14px 16px;
+    font: 500 1.05rem var(--body); color: var(--ink);
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+    -webkit-appearance: none;
+  }
+  .search input::placeholder { color: var(--ink-faint); }
+  .search input:focus { border-color: var(--blue); outline: none; }
+  .clear {
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    width: 32px; height: 32px; border-radius: 50%; color: var(--ink-dim); font-size: 20px; line-height: 1;
+  }
+  .clear:hover { background: var(--surface-2); }
+  .suggest {
+    position: absolute; left: 0; right: 0; top: calc(100% + 6px);
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+    overflow: hidden; box-shadow: 0 16px 40px rgba(0,0,0,.45); max-height: 60vh; overflow-y: auto;
+  }
+  .suggest[hidden] { display: none; }
+  .suggest button {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+    width: 100%; text-align: left; padding: 11px 16px; border-bottom: 1px solid var(--line);
+  }
+  .suggest button:last-child { border-bottom: 0; }
+  .suggest button.active, .suggest button:hover { background: var(--surface-2); }
+  .suggest .s-name { font-weight: 500; }
+  .suggest .s-name em { font-style: normal; color: var(--gold); }
+  .suggest .s-meta { font-family: var(--mono); font-size: .78rem; color: var(--ink-dim); white-space: nowrap; }
+  .search-hint { margin-top: 8px; font-size: .8rem; color: var(--ink-faint); display: flex; justify-content: space-between; gap: 8px; }
+
+  /* Empty / loading / error ------------------------------------------- */
+  .state { padding: 56px 0 24px; text-align: center; color: var(--ink-dim); }
+  .state h1 { font: 600 clamp(2rem, 8vw, 2.8rem)/1.05 var(--display); color: var(--ink); letter-spacing: -.01em; }
+  .state h1 .mark { color: var(--red); }
+  .state p { margin-top: 12px; max-width: 34ch; margin-left: auto; margin-right: auto; }
+  .state .err { color: var(--red); font-family: var(--mono); font-size: .85rem; margin-top: 16px; word-break: break-word; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 22px; }
+  .chips button { padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px; font-size: .88rem; color: var(--ink); }
+  .chips button:hover { border-color: var(--blue); }
+
+  /* Song card ---------------------------------------------------------- */
+  .song { animation: rise .35s ease-out both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .song { animation: none; } }
+
+  .title { margin-top: 18px; }
+  .title .eyebrow { font-family: var(--mono); font-size: .75rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-dim); }
+  .title h1 { font: 600 clamp(2.1rem, 9vw, 3rem)/1.02 var(--display); letter-spacing: -.015em; margin-top: 4px; }
+  .title h1 a { border-bottom: 2px solid transparent; }
+  .title h1 a:hover { border-bottom-color: var(--red); }
+  .title .by { color: var(--ink-dim); margin-top: 6px; }
+  .title .by b { color: var(--ink); font-weight: 500; }
+
+  .badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 7px 12px; border-radius: 8px; font-size: .9rem; font-weight: 500;
+    background: var(--surface-2); border: 1px solid var(--line);
+  }
+  .badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--blue); flex: none; }
+  .badge.hot { background: rgba(228,87,46,.16); border-color: rgba(228,87,46,.5); }
+  .badge.hot .dot { background: var(--red); box-shadow: 0 0 0 4px rgba(228,87,46,.18); }
+  .badge.gold { background: rgba(240,182,64,.14); border-color: rgba(240,182,64,.5); }
+  .badge.gold .dot { background: var(--gold); }
+  .badge.cool { background: rgba(124,155,224,.12); border-color: rgba(124,155,224,.45); }
+  .badge.green { background: rgba(124,207,138,.12); border-color: rgba(124,207,138,.45); }
+  .badge.green .dot { background: var(--green); }
+  .badge small { color: var(--ink-dim); font-weight: 400; }
+
+  /* Headline numbers */
+  .lead { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
+  .lead .cell { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 12px 10px; min-width: 0; }
+  .lead .num { font: 600 clamp(1.7rem, 7.5vw, 2.4rem)/1 var(--display); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+  .lead .num.hot { color: var(--red); }
+  .lead .lab { margin-top: 6px; font-size: .74rem; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-dim); }
+  .lead .sub { margin-top: 2px; font-size: .8rem; color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* History strip: one bar per year since debut ------------------------ */
+  .strip { margin-top: 22px; }
+  .strip .head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .strip h2, .sec h2 { font: 600 1.05rem/1.2 var(--display); }
+  .strip .legend { font-size: .76rem; color: var(--ink-faint); }
+  .strip .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: var(--blue); vertical-align: -1px; margin-right: 4px; }
+  .strip .legend i.now { background: var(--red); }
+  .bars { display: flex; align-items: flex-end; gap: 2px; height: 76px; margin-top: 10px; padding-bottom: 2px; border-bottom: 1px solid var(--line); }
+  .bars .bar { flex: 1 1 0; min-width: 0; position: relative; height: 100%; display: flex; align-items: flex-end; }
+  .bars .bar > i { display: block; width: 100%; background: var(--blue); border-radius: 2px 2px 0 0; min-height: 0; transition: height .4s ease-out; }
+  .bars .bar.zero > i { height: 2px !important; background: var(--line); }
+  .bars .bar.now > i { background: var(--red); }
+  .bars .bar.hiatus > i { background: transparent; border-bottom: 1px dashed var(--ink-faint); height: 0 !important; }
+  .bars .bar .tip { position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); font: 500 .72rem var(--mono); padding: 3px 6px; border-radius: 4px; white-space: nowrap; opacity: 0; pointer-events: none; }
+  .bars .bar:hover .tip, .bars .bar:focus .tip { opacity: 1; }
+  .axis { display: flex; justify-content: space-between; margin-top: 6px; font-family: var(--mono); font-size: .72rem; color: var(--ink-faint); }
+  .strip .note { margin-top: 8px; font-size: .84rem; color: var(--ink-dim); }
+
+  /* Sections ----------------------------------------------------------- */
+  .sec { margin-top: 26px; }
+  .sec .head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+  .sec .head a, .sec .head span { font-size: .8rem; color: var(--ink-dim); }
+  .sec .head a:hover { color: var(--ink); }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+  .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+  .stat .v { font: 600 1.25rem/1.1 var(--display); font-variant-numeric: tabular-nums; }
+  .stat .v small { font: 400 .8rem var(--body); color: var(--ink-dim); margin-left: 3px; }
+  .stat .k { margin-top: 4px; font-size: .74rem; color: var(--ink-dim); }
+
+  .perf { list-style: none; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .perf li { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 12px; padding: 11px 14px; background: var(--surface); border-bottom: 1px solid var(--line); align-items: baseline; }
+  .perf li:last-child { border-bottom: 0; }
+  .perf .date { font-family: var(--mono); font-size: .9rem; font-weight: 500; }
+  .perf .date:hover { color: var(--blue); }
+  .perf .venue { color: var(--ink-dim); font-size: .9rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .perf .gap { font-family: var(--mono); font-size: .8rem; color: var(--ink-dim); text-align: right; }
+  .perf .gap.hot { color: var(--red); font-weight: 500; }
+  .perf .slot { grid-column: 1 / -1; font-family: var(--mono); font-size: .76rem; color: var(--ink-faint); display: flex; flex-wrap: wrap; gap: 6px 12px; }
+  .perf .slot .jc { color: var(--gold); }
+  .perf .slot .mark { color: var(--red); }
+  .perf .foot { grid-column: 1 / -1; font-size: .82rem; color: var(--ink-dim); font-style: italic; }
+  .perf .foot a { color: var(--blue); }
+  .more { display: block; width: 100%; text-align: center; padding: 11px; margin-top: 8px; border: 1px dashed var(--line); border-radius: 10px; color: var(--ink-dim); font-size: .88rem; }
+  .more:hover { color: var(--ink); border-color: var(--ink-dim); }
+
+  .jam { background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--gold); border-radius: 12px; padding: 12px 14px; }
+  .jam .when { font-family: var(--mono); font-size: .8rem; color: var(--ink-dim); }
+  .jam .when a:hover { color: var(--blue); }
+  .jam p { margin-top: 6px; font-size: .92rem; color: var(--ink); }
+  .jam p a { color: var(--blue); }
+
+  .segues { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px; }
+  .seg { min-width: 0; }
+  .seg { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .seg h3 { font: 500 .74rem var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-dim); }
+  .seg ol { list-style: none; margin-top: 6px; }
+  /* Each row is a two-column grid: the song (which may wrap onto more lines)
+     and its numbers. The song column can shrink below its content width
+     (minmax(0, …)), so a long title or a cover credit never pushes the
+     numbers out or slides under them; on narrow phones the numbers drop to
+     their own line instead of squeezing the title. */
+  .seg li { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 10px; align-items: baseline; padding: 5px 0; font-size: .9rem; border-top: 1px solid var(--line); }
+  .seg li:first-child { border-top: 0; }
+  .seg li button { text-align: left; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .seg li button:hover { color: var(--blue); }
+  .seg { container-type: inline-size; }
+  .seg li .t { min-width: 0; overflow-wrap: break-word; line-height: 1.35; }
+  .seg li .t a { color: inherit; text-decoration: none; }
+  .seg li .t a:hover { color: var(--blue); }
+  .seg li .t .cover { display: block; color: var(--ink-faint); font-size: .76rem; margin-top: 1px; }
+  .seg .n { font-family: var(--mono); font-size: .8rem; color: var(--ink-dim); white-space: nowrap; text-align: right; }
+  /* A cramped panel (narrow phone, or a squeezed column on a mid-size
+     screen) stacks the numbers under the title instead of squeezing it. */
+  @media (max-width: 420px) {
+    .seg li { grid-template-columns: 1fr; row-gap: 2px; }
+    .seg .n { text-align: left; }
+  }
+  @container (max-width: 340px) {
+    .seg li { grid-template-columns: 1fr; row-gap: 2px; }
+    .seg .n { text-align: left; }
+  }
+  .seg .mark { font-family: var(--mono); color: var(--red); }
+  .seg .none { font-size: .85rem; color: var(--ink-faint); padding: 4px 0; }
+
+  /* Live panel: tonight's posts from the phish.com Bluesky account -------- */
+  .live { margin-top: 14px; background: var(--surface); border: 1px solid rgba(228,87,46,.45); border-radius: 12px; overflow: hidden; }
+  .live[hidden] { display: none; }
+  .live .l-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: .82rem; color: var(--ink-dim); }
+  .live .l-head b { color: var(--ink); font-weight: 500; }
+  .live .l-head .upd { margin-left: auto; font-family: var(--mono); font-size: .72rem; color: var(--ink-faint); white-space: nowrap; }
+  .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--red); flex: none; box-shadow: 0 0 0 0 rgba(228,87,46,.6); animation: pulse 1.6s ease-out infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(228,87,46,.55); } 100% { box-shadow: 0 0 0 9px rgba(228,87,46,0); } }
+  @media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
+  .live .l-now { padding: 14px 14px 12px; border-bottom: 1px solid var(--line); }
+  .live .l-now .k { font-size: .74rem; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-dim); }
+  .live .l-now .v { font: 600 clamp(1.8rem, 8vw, 2.6rem)/1.05 var(--display); font-variant-numeric: tabular-nums; letter-spacing: -.02em; margin-top: 2px; }
+  .live .l-now .v.hot { color: var(--red); }
+  .live .l-now .v small { font: 400 .95rem var(--body); color: var(--ink-dim); margin-left: 6px; letter-spacing: 0; }
+  .live .l-now .s { margin-top: 4px; font-size: .84rem; color: var(--ink-dim); }
+  .live .l-now .s b { color: var(--ink); font-weight: 500; }
+  .live ol { list-style: none; }
+  .live li { display: flex; align-items: baseline; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--line); font-size: .92rem; }
+  .live li:last-child { border-bottom: 0; }
+  .live li.setmark { padding-top: 10px; font-family: var(--mono); font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); background: var(--bg); justify-content: space-between; }
+  .live li.setmark .at { text-transform: none; letter-spacing: 0; color: var(--ink-dim); }
+  .live .l-times { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; padding: 9px 14px; border-bottom: 1px solid var(--line); font-size: .86rem; color: var(--ink-dim); }
+  .live .l-times b { color: var(--ink); font-weight: 500; }
+  .live .l-times i { font-style: normal; color: var(--ink-faint); }
+  .live .l-times small { font-family: var(--mono); font-size: .72rem; color: var(--ink-faint); margin-left: auto; }
+  .live li button { text-align: left; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Provisional notables under a song: rank among timed versions, bustout, debut. */
+  .live li { flex-wrap: wrap; }
+  .live li .ln { flex-basis: 100%; font-size: .78rem; line-height: 1.4; }
+  .live li .ln .bo { color: var(--red); font-weight: 600; }
+  .live li .ln i { font-style: normal; font-family: var(--mono); font-size: .66rem; letter-spacing: .04em; color: var(--ink-faint); margin-left: 4px; }
+  /* Three degrees of highlight: faint, notable, hot. Row tint plus note colour. */
+  .live li.n1 { background: rgba(240,182,64,.05); }
+  .live li.n2 { background: rgba(240,182,64,.11); }
+  .live li.n3 { background: rgba(228,87,46,.13); box-shadow: inset 3px 0 0 var(--red); }
+  .live li .ln.t1 { color: var(--ink-dim); }
+  .live li .ln.t2 { color: var(--gold); }
+  .live li .ln.t3 { color: #f6c25a; font-weight: 500; }
+  /* Header callout: what is in contention right now, strongest first. */
+  .live .l-alert { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 9px 14px; border-bottom: 1px solid var(--line); font-size: .86rem; }
+  .live .l-alert .k { font-family: var(--mono); font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-dim); }
+  .live .l-alert .a b { font-weight: 600; color: var(--ink); }
+  .live .l-alert .a.t1 { color: var(--ink-dim); }
+  .live .l-alert .a.t2 { color: var(--gold); }
+  .live .l-alert .a.t3 { color: #f6c25a; }
+  .live .l-alert.t3 { background: rgba(228,87,46,.13); }
+  .live .l-alert.t2 { background: rgba(240,182,64,.08); }
+  .live .l-alert i { font-style: normal; font-family: var(--mono); font-size: .66rem; letter-spacing: .04em; color: var(--ink-faint); margin-left: auto; }
+  .live li button:hover { color: var(--blue); }
+  .live li.current button { color: var(--gold); font-weight: 500; }
+  .live li .t { font-family: var(--mono); font-size: .8rem; color: var(--ink-dim); white-space: nowrap; }
+  .live li .t.playing { color: var(--red); font-weight: 500; }
+  .live li .t.br { color: var(--ink-faint); }
+  .live .l-foot { padding: 8px 14px; font-size: .74rem; color: var(--ink-faint); border-top: 1px solid var(--line); }
+  .live .l-foot a { color: var(--ink-dim); }
+
+  .perf .approx { color: var(--gold); }
+  .perf .approx small { font-weight: 400; color: var(--ink-faint); }
+  .perf .rec { color: var(--green); font-weight: 500; }
+  .perf .rec small { font-weight: 400; color: var(--ink-faint); }
+  .perf .rec.official small { color: var(--green); opacity: .7; }
+  /* A length that came from a recording links to it. Dotted rather than a
+     button: it sits inside a run of small monospace facts, and a row of
+     buttons there would outweigh the setlist above it. */
+  .perf a.rec.src { border-bottom: 1px dotted var(--line); }
+  .perf a.rec.src:hover { border-bottom-color: currentColor; }
+  .live li .t.official { color: var(--green); font-weight: 500; }
+  .live li .t small { font-weight: 400; opacity: .7; margin-left: 4px; font-size: .68rem; }
+  .live .l-head.over .pulse { animation: none; background: var(--ink-faint); box-shadow: none; }
+
+  /* Venue section ------------------------------------------------------ */
+  .venue-line { font-size: .95rem; color: var(--ink); margin-bottom: 10px; line-height: 1.5; }
+  .venue-line b { font-weight: 600; }
+  .venue-line .vs { color: var(--ink-dim); }
+  .venue-pick { display: none; margin: 0 0 10px; }
+  .venue-pick.open { display: flex; gap: 8px; }
+  .venue-pick input { flex: 1; padding: 10px 12px; font: 400 .95rem var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; -webkit-appearance: none; }
+  .venue-pick input:focus { border-color: var(--blue); outline: none; }
+  .venue-pick button { padding: 0 14px; border: 1px solid var(--line); border-radius: 10px; font-size: .88rem; }
+  .sec .head button.change { font-size: .8rem; color: var(--ink-dim); border-bottom: 1px dashed var(--line); }
+  .sec .head button.change:hover { color: var(--ink); }
+
+  /* Stat cards ------------------------------------------------------------
+     A label/value list with a few prose lines under it. Three renderers emit
+     it: the landing page's season cards (assets/landing.js), the tour page's
+     "The numbers" and the era page's notables (assets/period.js). It is
+     scoped on .card rather than on .season for that reason — while it was
+     scoped on .season the tour page got the markup and none of the layout,
+     so every row read "Shows19". */
+  .card .rows { display: grid; gap: 3px; }
+  .card .row { display: flex; justify-content: space-between; gap: 10px; font-size: .88rem; padding: 3px 0; border-top: 1px solid var(--line); }
+  .card .row:first-child { border-top: 0; }
+  .card .row span { color: var(--ink-dim); }
+  .card .row b { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+  .card .row small { font-weight: 400; font-family: var(--mono); font-size: .68rem; color: var(--ink-faint); margin-left: 6px; }
+  .card .row small.up { color: var(--gold); }
+  .card .row small.down { color: var(--blue); }
+  .card .lines { margin-top: 8px; display: grid; gap: 5px; font-size: .82rem; color: var(--ink-dim); line-height: 1.4; }
+  .card .lines b { color: var(--ink); font-weight: 600; }
+  .card .lines b.gold { color: var(--gold); }
+  .card .lines b.red { color: var(--red); }
+  .card .lines b.green { color: var(--green); }
+  .card .lines a { color: var(--blue); }
+
+  /* Landing panels: tonight's opener calls and today in history ------------ */
+  .landing { text-align: left; }
+  /* Season cards: this run, this tour, the year. */
+  .season .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; }
+  .season .card .sub { font-size: .8rem; color: var(--ink-dim); margin: 2px 0 8px; }
+  .season.review .head h2 { color: var(--gold); }
+  .landing .perf .slot .bo { color: var(--red); }
+  .landing .perf .slot .rec { color: var(--green); }
+  .landing .perf .venue a:hover { color: var(--blue); }
+  /* 300px minimum: the long-shots rows carry "gap 1,808 · last 12/16/89", so
+     three columns at the 900px page width would squeeze titles; two columns
+     with the third panel on its own row reads better. */
+  .tonight .segues { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .tonight .call-result { padding: 6px 0; font-size: .95rem; }
+  .tonight .call-result b { font-size: 1.1rem; }
+  .tonight .call-result a { color: inherit; text-decoration: none; }
+  .tonight .call-result a:hover { color: var(--blue); }
+
+  /* Show-day weather strip (Open-Meteo): one column per hour from 3 PM. */
+  .wx { margin: 10px 0 14px; }
+  .wx-line { font-size: .9rem; color: var(--ink-dim); margin-bottom: 8px; }
+  .wx-line a { color: var(--blue); border-bottom: 1px solid var(--line); }
+  .wx-strip { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+  .wx-h { flex: 1 0 52px; text-align: center; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 2px; font-size: .8rem; line-height: 1.45; }
+  .wx-h.wet { border-color: var(--blue); }
+  .wx-h .t { font-family: var(--mono); font-size: .72rem; color: var(--ink-faint); }
+  .wx-h .i { font-size: 1.1rem; }
+  .wx-h .d { font-weight: 600; }
+  .wx-h .p, .wx-h .w { font-family: var(--mono); font-size: .72rem; color: var(--ink-dim); }
+  .wx-h.wet .p { color: var(--blue); }
+
+  .foot-note { margin-top: 28px; font-size: .78rem; color: var(--ink-faint); text-align: center; line-height: 1.6; }
+  .foot-note a { color: var(--ink-dim); border-bottom: 1px solid var(--line); }

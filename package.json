@@ -1,0 +1,16 @@
+{
+  "name": "phishstats",
+  "version": "1.0.0",
+  "description": "Phish song statistics: a zero-dependency Node mirror of Phish.net setlist data with a small web server over it",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "seed": "node scripts/seed.js",
+    "backfill": "node scripts/backfill.js",
+    "refresh": "node scripts/refresh.js",
+    "ingest-live": "node scripts/ingest-live.js",
+    "test": "node --test"
+  }
+}

@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#15121c">
+<title>Song lookup · Phish.net local cache</title>
+<link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/icon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link rel="manifest" href="/assets/manifest.json">
+<meta name="apple-mobile-web-app-title" content="Phish">
+<meta name="application-name" content="Phish stats">
+<link rel="stylesheet" href="/assets/app.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="topbar">
+    <a class="brand" href="/song" title="Home: a fresh landing page">Phish stats<img src="/assets/icon.svg" alt="" width="24" height="24"></a>
+    <nav class="crumbs" id="crumbs" aria-label="Breadcrumb"></nav>
+    <nav class="quick" aria-label="Quick links"><a class="home" href="/song">Home</a><a href="/show/latest">Latest<span class="long"> show</span></a><a href="/show/random">Random<span class="long"> show</span></a><a href="/eras">Eras</a></nav>
+  </header>
+  <form class="search" role="search" autocomplete="off" id="searchForm">
+    <div class="search-row">
+      <input id="q" type="search" placeholder="Hear a song? Type it." aria-label="Song name" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="search">
+      <button type="button" class="clear" id="clearBtn" aria-label="Clear" hidden>&times;</button>
+      <div class="suggest" id="suggest" role="listbox" hidden></div>
+    </div>
+    <div class="search-hint"><span id="hintLeft">Phish shows only, official stats</span><span id="hintRight"></span></div>
+  </form>
+
+  <section class="live" id="live" hidden aria-live="polite"></section>
+
+  <main id="out" aria-live="polite"></main>
+
+  <p class="foot-note">
+    {% include "_compliance.html" %}
+    <br>Tonight's show lands with the next morning's refresh, so treat these as the numbers going into the show.
+    
+  </p>
+</div>
+
+<script src="/assets/timezones.js"></script>
+<script src="/assets/app.js"></script>
+<script src="/assets/season-stats.js"></script>
+<script src="/assets/landing.js"></script>
+<script>
+(function () {
+  'use strict';
+  var TZ = window.PhishTimeZones;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var q = $('q'), suggest = $('suggest'), out = $('out'), clearBtn = $('clearBtn');
+
+  // Shared helpers (data access, formatting, search) live in /assets/app.js.
+  var P = window.Phish;
+  var api = P.api;
+  var esc = P.esc, n = P.n, pct = P.pct, yearOf = P.yearOf, fmtDate = P.fmtDate, shortMonth = P.shortMonth, longDate = P.longDate,
+      yearsBetween = P.yearsBetween, songUrl = P.songUrl, safeNote = P.safeNote, mmss = P.mmss, approxMin = P.approxMin, bskyKey = P.songKey;
+
+  // ---- catalog + unified search (songs, venues, cities, dates) ------------
+  var songs = [], byId = {};
+  var listReady = P.loadCatalog().then(function (c) {
+    songs = c.songs; byId = c.songById; venues = c.venues; venueById = c.venueById;
+    $('hintRight').textContent = n(songs.filter(function (s) { return s.plays > 0; }).length) + ' songs';
+    return c;
+  }).catch(function (e) { showError(e); });
+
+  // Songs load in place; a venue, city, or date goes to its own page.
+  P.mountSearch({ input: q, suggest: suggest, clear: clearBtn, onPick: function (it) {
+    if (it.kind === 'song') { choose(it.id); return true; }
+    return false;
+  } });
+
+  var currentId = null;
+  function choose(id) {
+    var s = byId[id]; if (!s) return;
+    currentId = id;
+    q.value = s.name; clearBtn.hidden = false; suggest.hidden = true; q.blur();
+    history.replaceState(null, '', '?song=' + encodeURIComponent(s.name));
+    load(id);
+    renderLive();
+  }
+
+  // ---- live setlist from the phish.com Bluesky account ------------------
+  // The account posts each song as it starts. Reading the public feed from
+  // the browser needs no login and no server. This is the same parsing the
+  // nightly ingest uses (lib/bsky.js); keep the two in step.
+  var BSKY_FEED = 'https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=phish.com&limit=60&filter=posts_no_replies';
+  // A show counts as "tonight" while its newest post is under 8 hours old.
+  // ?livewindow=48 widens that (hours) to review a recent show's timings.
+  var LIVE_WINDOW_MS = (Number(new URLSearchParams(location.search).get('livewindow')) || 8) * 3600 * 1000;
+  var DATE_HEADER = /^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})\s+([^\n]{1,80})$/;
+  var SET_PREFIX = /^SET\s+(ONE|TWO|THREE|FOUR|1|2|3|4)\s*:\s*(.*)$/i;
+  var ENCORE_PREFIX = /^ENCORE(?:\s*(\d))?\s*:\s*(.*)$/i;
+  var NOT_A_SONG = /https?:\/\/|\n|available for download|phish radio|livestream|on sale|tickets|\.com\b|\bapp\b/i;
+  var SET_WORDS = { one: '1', two: '2', three: '3', four: '4' };
+  function parseLiveFeed(posts) {
+    var sorted = posts.slice().sort(function (a, b) { return new Date(a.createdAt) - new Date(b.createdAt); });
+    var entries = [], show = null;
+    sorted.forEach(function (p) {
+      var text = String(p.text || '').trim();
+      var header = DATE_HEADER.exec(text);
+      if (header && !NOT_A_SONG.test(text)) {
+        var year = header[3].length === 2 ? 2000 + Number(header[3]) : Number(header[3]);
+        var tz = TZ ? TZ.venueTimeZone(TZ.parseLocation(header[4])) : null;
+        show = { showdate: year + '-' + String(header[1]).padStart(2, '0') + '-' + String(header[2]).padStart(2, '0'), location: header[4].trim(), tz: tz, set: '1', markerAt: null, started: {} };
+        return;
+      }
+      if (!show) return;
+      var song = text, setLabel = show.set, set = SET_PREFIX.exec(text), enc = ENCORE_PREFIX.exec(text);
+      if (set) { setLabel = SET_WORDS[set[1].toLowerCase()] || set[1]; song = set[2].trim(); }
+      else if (enc) { setLabel = enc[1] && enc[1] !== '1' ? 'e' + enc[1] : 'e'; song = enc[2].trim(); }
+      else if (!text || text.length > 80 || NOT_A_SONG.test(text)) {
+        // The "now available" recap post is the show-over signal.
+        if (/available for download/i.test(text)) {
+          entries.forEach(function (e) { if (e.showdate === show.showdate) e.show_ended_at = new Date(p.createdAt); });
+        }
+        show = null; return;
+      }
+      if (!song) { show.set = setLabel; show.markerAt = new Date(p.createdAt); return; }
+      var setStartedAt = null;
+      if (!show.started[setLabel]) { show.started[setLabel] = true; setStartedAt = show.markerAt || new Date(p.createdAt); }
+      show.markerAt = null;
+      show.set = setLabel;
+      entries.push({ showdate: show.showdate, location: show.location, tz: show.tz, set_label: setLabel, song: song, posted_at: new Date(p.createdAt), next_posted_at: null, approx_seconds: null, closer: true, set_started_at: setStartedAt, show_ended_at: null });
+    });
+    for (var i = 0; i < entries.length; i++) {
+      var cur = entries[i], next = entries[i + 1];
+      if (!next || next.showdate !== cur.showdate) continue;
+      cur.next_posted_at = next.posted_at;
+      if (next.set_label === cur.set_label) { cur.closer = false; cur.approx_seconds = Math.round((next.posted_at - cur.posted_at) / 1000); }
+    }
+    return entries;
+  }
+
+  var live = { entries: null, fetchedAt: null, error: null, official: {} };
+
+  // ---- provisional notables from the live feed --------------------------
+  // What tonight's songs might mean, judged from the catalog (gap, plays)
+  // and every timed version on record. Lengths come from post-to-post
+  // timing until the LivePhish release supplies official ones, so every
+  // length-based note is flagged provisional until then.
+  var liveFacts = { key: '', lengths: {}, songs: {} };
+  var keyToSong = null;
+  function catalogSong(name) {
+    if (!keyToSong) { keyToSong = {}; songs.forEach(function (s) { keyToSong[bskyKey(s.name)] = s; }); }
+    return keyToSong[bskyKey(name)] || null;
+  }
+  function loadLiveFacts(entries) {
+    return listReady.then(function () {
+      var ids = []; entries.forEach(function (e) { var s = catalogSong(e.song); if (s && ids.indexOf(s.id) < 0) ids.push(s.id); });
+      var key = ids.join(',');
+      if (!ids.length || key === liveFacts.key) return;
+      return Promise.all([
+        api('song/lengths', { ids: key }),
+        api('song/facts', { ids: key })
+      ]).then(function (r) {
+        // One row per song: how many timed versions there are, the top five,
+        // and the median. The endpoint used to return every version, which the
+        // 5000-row cap truncated at a song boundary so late songs got nothing.
+        var lengths = {};
+        r[0].forEach(function (x) {
+          lengths[x.songid] = {
+            n: Number(x.n),
+            median: Number(x.median_ms),
+            top: [x.top1, x.top2, x.top3, x.top4, x.top5]
+              .filter(function (v) { return v != null; }).map(Number),
+          };
+        });
+        var facts = {}; r[1].forEach(function (x) { facts[x.songid] = x; });
+        liveFacts = { key: key, lengths: lengths, songs: facts };
+      });
+    }).catch(function () {});
+  }
+  // The note for one entry; elapsedMs is the running clock for the song in
+  // progress. Returns null when there is nothing worth saying.
+  // Tiers drive how loud the highlight is: 3 = record territory, a 100+
+  // show bustout, a debut; 2 = a top-three length, a 50+ gap, a third-ever
+  // performance; 1 = top five or past the median, worth a glance only.
+  function liveNote(e, elapsedMs) {
+    var s = catalogSong(e.song);
+    if (!s) return { tier: 3, text: 'not in the phish.net catalog: a debut, or a cover not listed yet', prov: true, brief: 'possible debut' };
+    var parts = [], tier = 0, brief = '', f = liveFacts.songs[s.id];
+    if (f && Number(f.gap) >= 50) { parts.push('<b class="bo">bustout</b> first since ' + fmtDate(f.last_played) + ', ' + n(f.gap) + '-show gap'); tier = Number(f.gap) >= 100 ? 3 : 2; brief = n(f.gap) + '-show bustout'; }
+    else if (f && Number(f.times_played) <= 3) { parts.push(P.ordinal(Number(f.times_played) + 1) + ' performance ever'); tier = 2; brief = P.ordinal(Number(f.times_played) + 1) + ' performance ever'; }
+    var secs = e.official_seconds || e.approx_seconds || (elapsedMs ? elapsedMs / 1000 : 0);
+    var L = liveFacts.lengths[s.id];
+    if (secs && L && L.n >= 5) {
+      // Counting only the top five is enough: a length that beats none of them
+      // ranks sixth or worse, which is exactly where the branch below stops
+      // caring. The old code counted over the whole list for the same answer.
+      var ms = secs * 1000, rank = 1 + L.top.filter(function (x) { return x > ms; }).length;
+      if (rank <= 5) {
+        var verb = e.official_seconds ? (rank === 1 ? 'longest ever' : '#' + rank + ' longest') : (rank === 1 ? 'would be the longest ever' : 'would be #' + rank + ' longest');
+        parts.push(verb + ' of ' + n(L.n) + ' timed versions' + (rank === 1 ? ', ahead of ' + mmss(L.top[0]) : ', record ' + mmss(L.top[0])) + (elapsedMs ? ', and counting' : ''));
+        var t = rank === 1 ? 3 : rank <= 3 ? 2 : 1;
+        if (t >= tier) { tier = t; brief = verb + (elapsedMs ? ', and counting' : ''); }
+      } else if (elapsedMs && ms > L.median) {
+        parts.push('already past the median ' + mmss(L.median) + ' of ' + n(L.n) + ' timed versions');
+        if (!tier) { tier = 1; brief = 'past its median length'; }
+      }
+    }
+    return parts.length ? { tier: tier, text: parts.join(' · '), prov: !e.official_seconds && !!secs, brief: brief } : null;
+  }
+  function noteHtml(note) {
+    return note ? '<span class="ln t' + note.tier + (note.prov ? ' prov' : '') + '">' + note.text + (note.prov ? ' <i>provisional</i>' : '') + '</span>' : '';
+  }
+  // Official LivePhish lengths for the show in the panel, keyed by song and
+  // handed out in order so a song played twice gets both its lengths.
+  function loadOfficial(showdate) {
+    return api('show/livephish-tracks', { d: showdate })
+      .then(function (rows) {
+        var byKey = {};
+        rows.forEach(function (r) { var k = bskyKey(r.title); (byKey[k] = byKey[k] || []).push(r.seconds); });
+        live.official = byKey;
+      }).catch(function () { live.official = {}; });
+  }
+  function loadLive() {
+    fetch(BSKY_FEED).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(function (j) {
+      var posts = (j.feed || []).filter(function (f) { return !f.reason && f.post && f.post.record; })
+        .map(function (f) { return { text: f.post.record.text, createdAt: f.post.record.createdAt }; });
+      var all = parseLiveFeed(posts);
+      var latest = all.length ? all[all.length - 1] : null;
+      var newest = latest ? Math.max(latest.posted_at.getTime(), latest.show_ended_at ? latest.show_ended_at.getTime() : 0) : 0;
+      live.entries = latest && (Date.now() - newest) < LIVE_WINDOW_MS ? all.filter(function (e) { return e.showdate === latest.showdate; }) : [];
+      live.fetchedAt = new Date(); live.error = null;
+      return live.entries.length ? Promise.all([loadOfficial(live.entries[0].showdate), loadLiveFacts(live.entries)]) : null;
+    }).catch(function (e) { live.error = e; live.fetchedAt = new Date(); }).then(function () {
+      renderLive();
+      if (P.landingLive) P.landingLive(live.entries);
+      // The venue section depends on tonight's location, so re-render the
+      // song card once the feed has arrived (only when it changes anything).
+      if (lastRender && !pickedVenueId) {
+        var before = document.querySelector('#venueSec h2'), v = currentVenue(lastRender[0][0]);
+        if (v && (!before || before.textContent !== 'At ' + v.venue)) render(lastRender[0][0], lastRender[1], lastRender[2], lastRender[3]);
+      }
+    });
+  }
+  function clock(ms) {
+    var s = Math.max(0, Math.floor(ms / 1000)), m = Math.floor(s / 60), h = Math.floor(m / 60);
+    var mm = String(m % 60).padStart(h ? 2 : 1, '0'), ss = String(s % 60).padStart(2, '0');
+    return (h ? h + ':' : '') + mm + ':' + ss;
+  }
+  function renderLive() {
+    var el = $('live');
+    var entries = live.entries || [];
+    if (!entries.length) { el.hidden = true; el.innerHTML = ''; return; }
+    var last = entries[entries.length - 1];
+    var over = !!last.show_ended_at;
+    // Attach official lengths to entries in setlist order.
+    var queues = {};
+    Object.keys(live.official).forEach(function (k) { queues[k] = live.official[k].slice(); });
+    entries.forEach(function (e) { var q = queues[bskyKey(e.song)]; e.official_seconds = q && q.length ? q.shift() : null; });
+    var curKey = currentId && byId[currentId] ? bskyKey(byId[currentId].name) : null;
+    var mine = curKey ? entries.filter(function (e) { return bskyKey(e.song) === curKey; }) : [];
+    var nowHtml = '';
+    if (mine.length) {
+      var m = mine[mine.length - 1];
+      if (m.official_seconds) {
+        nowHtml = '<div class="l-now"><div class="k">' + esc(byId[currentId].name) + ' · tonight</div>' +
+          '<div class="v">' + mmss(m.official_seconds * 1000) + '<small>LP</small></div>' +
+          (m.approx_seconds ? '<div class="s">Post to post read ≈' + approxMin(m.approx_seconds) + ' BS.</div>' : '') + '</div>';
+      } else if (m === last && !over) {
+        nowHtml = '<div class="l-now"><div class="k">' + esc(byId[currentId].name) + ' · playing now</div>' +
+          '<div class="v hot"><span data-since="' + m.posted_at.toISOString() + '">' + clock(Date.now() - m.posted_at) + '</span><small>and counting</small></div>' +
+          '<div class="s">Since the post at ' + m.posted_at.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) + '. Check back after the next song is posted for the post-to-post length.' +
+          (songLength && songLength.songid === currentId && (songLength.typicalMs || songLength.longest)
+            ? ' <b>' + (songLength.typicalMs ? 'Typical ' + mmss(songLength.typicalMs) : '') + (songLength.longest ? (songLength.typicalMs ? ' · ' : '') + 'longest ' + mmss(songLength.longest.rec_ms) + ' (' + fmtDate(songLength.longest.showdate) + ')' : '') + '</b>'
+            : '') + '</div></div>';
+      } else {
+        nowHtml = '<div class="l-now"><div class="k">' + esc(byId[currentId].name) + ' · tonight</div>' +
+          '<div class="v">' + (m.approx_seconds ? '≈' + approxMin(m.approx_seconds) : '–') + '<small>' + (m.approx_seconds ? 'BS, post to post' : over ? 'show over; LP length arrives with the LivePhish release' : 'set closer, next post came after the break') + '</small></div></div>';
+      }
+    }
+    var tz = last.tz;
+    function localTime(d, zone) { return TZ && tz ? TZ.formatLocalTime(d.toISOString(), tz, { zone: zone }) : d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }); }
+    function segName(label) { return label === 'e' ? 'Encore' : /^e\d/.test(label) ? 'Encore ' + label.slice(1) : 'Set ' + label; }
+    // One line of set/encore start times on the venue clock, e.g.
+    // "Set 1 7:56 PM · Set 2 9:39 PM · Encore 11:07 PM (MDT)".
+    var starts = entries.filter(function (e) { return e.set_started_at; });
+    var zoneLabel = tz && TZ ? TZ.formatLocalTime(last.posted_at.toISOString(), tz).split(' ').pop() : '';
+    var timeline = starts.length ? '<div class="l-times">' + starts.map(function (e) {
+      return '<span><b>' + esc(segName(e.set_label)) + '</b> ' + esc(localTime(e.set_started_at, false)) + '</span>';
+    }).join('<i>·</i>') + (zoneLabel ? ' <small>' + esc(zoneLabel) + (tz ? '' : ', your clock') + '</small>' : '<small>your clock</small>') + '</div>' : '';
+    var listHtml = '', lastSet = null, alerts = [];
+    entries.forEach(function (e) {
+      if (e.set_label !== lastSet) {
+        lastSet = e.set_label;
+        var startedAt = e.set_started_at || e.posted_at;
+        listHtml += '<li class="setmark"><span>' + esc(segName(e.set_label)) + '</span><span class="at" title="from the set post, on the venue clock">' + esc(localTime(startedAt, true)) + '</span></li>';
+      }
+      var t;
+      if (e.official_seconds) t = '<span class="t official" title="official LivePhish length">' + mmss(e.official_seconds * 1000) + '<small>LP</small></span>';
+      else if (e === last && !over) t = '<span class="t playing" data-since="' + e.posted_at.toISOString() + '">' + clock(Date.now() - e.posted_at) + '</span>';
+      else if (e.approx_seconds) t = '<span class="t" title="post to post from Bluesky">≈' + approxMin(e.approx_seconds) + '<small>BS</small></span>';
+      else t = '<span class="t br" title="' + (e === last && over ? 'show over; no next post to time against' : 'set closer') + '">—</span>';
+      var playing = e === last && !over && !e.official_seconds;
+      var note = liveNote(e, playing ? Date.now() - e.posted_at : 0);
+      if (note) alerts.push({ song: e.song, note: note, playing: playing });
+      var cls = [curKey && bskyKey(e.song) === curKey ? 'current' : '', note ? 'n' + note.tier : ''].filter(Boolean).join(' ');
+      listHtml += '<li' + (cls ? ' class="' + cls + '"' : '') + (playing ? ' data-playing-since="' + e.posted_at.toISOString() + '" data-song="' + esc(e.song) + '"' : '') + '><button type="button" data-key="' + esc(bskyKey(e.song)) + '">' + esc(e.song) + '</button>' + t + noteHtml(note) + '</li>';
+    });
+    el.innerHTML =
+      '<div class="l-head' + (over ? ' over' : '') + '"><span class="pulse"></span><span><b>' + (over ? 'Final' : 'Live') + '</b> · <a href="' + P.showPage(last.showdate) + '" title="show page">' + esc(last.showdate.slice(5).replace('-', '/')) + ' ' + esc(last.location) + '</a>' +
+        (over ? ' · ended ' + esc(localTime(last.show_ended_at, false)) : '') + '</span>' +
+      '<span class="upd" data-fetched="' + live.fetchedAt.toISOString() + '">updated ' + clock(Date.now() - live.fetchedAt) + ' ago</span></div>' +
+      (alerts.length ? (function () {
+        alerts.sort(function (a, b) { return b.note.tier - a.note.tier || (b.playing ? 1 : 0) - (a.playing ? 1 : 0); });
+        var top = alerts.slice(0, 3), anyProv = top.some(function (a) { return a.note.prov; });
+        return '<div class="l-alert t' + top[0].note.tier + '"><span class="k">' + (top[0].playing ? 'Now' : 'Tonight') + '</span>' +
+          top.map(function (a) { return '<span class="a t' + a.note.tier + '"><b>' + esc(a.song) + '</b> ' + a.note.brief + '</span>'; }).join('') +
+          (anyProv ? '<i>provisional</i>' : '') + '</div>';
+      })() : '') +
+      timeline + nowHtml + '<ol>' + listHtml + '</ol>' +
+      '<div class="l-foot">' + (Object.keys(live.official).length
+        ? 'LP: official length from the LivePhish release. BS: post to post from <a href="https://bsky.app/profile/phish.com" target="_blank" rel="noopener">@phish.com</a>.'
+        : 'BS: post to post from <a href="https://bsky.app/profile/phish.com" target="_blank" rel="noopener">@phish.com</a>, so the current song reads as "at least". LP lengths replace them once the LivePhish release is posted.') +
+        ' Notes under a song are judged from the catalog and every timed version on record; length-based ones stay provisional until the official times arrive. Tap a song to look it up.</div>';
+    el.hidden = false;
+    el.querySelectorAll('button[data-key]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var hit = songs.filter(function (s) { return bskyKey(s.name) === btn.dataset.key; })[0];
+        if (hit) { choose(hit.id); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+      });
+    });
+  }
+  var noteTick = 0;
+  setInterval(function () {
+    var now = Date.now();
+    document.querySelectorAll('[data-since]').forEach(function (n) { n.textContent = clock(now - new Date(n.dataset.since)); });
+    // The song in progress crosses length milestones while the clock runs.
+    if (++noteTick % 5 === 0) {
+      var li = document.querySelector('li[data-playing-since]');
+      if (li) {
+        var html = noteHtml(liveNote({ song: li.dataset.song, official_seconds: null, approx_seconds: null }, now - new Date(li.dataset.playingSince)));
+        var cur = li.querySelector('.ln');
+        if ((cur ? cur.outerHTML : '') !== html) renderLive();
+      }
+    }
+    document.querySelectorAll('[data-fetched]').forEach(function (n) { n.textContent = 'updated ' + clock(now - new Date(n.dataset.fetched)) + ' ago'; });
+  }, 1000);
+  setInterval(loadLive, 60 * 1000);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) loadLive(); });
+  loadLive();
+
+  // Real time: Bluesky's Jetstream (a public websocket firehose, filtered to
+  // one account) delivers each phish.com post the moment it lands, so the
+  // panel refreshes a couple of seconds after the band posts instead of at
+  // the next minute. The 60 s poll above stays as the fallback. Reconnects
+  // with backoff; the public API needs a moment to index the post.
+  var PHISH_DID = 'did:plc:75by2x6uvnnfoyluyc3y4ota';
+  (function jetstream(delay) {
+    if (!('WebSocket' in window)) return;
+    var ws;
+    try { ws = new WebSocket('wss://jetstream2.us-east.bsky.network/subscribe?wantedCollections=app.bsky.feed.post&wantedDids=' + PHISH_DID); } catch (e) { return; }
+    ws.onopen = function () { delay = 5000; window.__jetstream = 'open'; };
+    ws.onmessage = function (ev) {
+      try {
+        var m = JSON.parse(ev.data);
+        if (m.kind === 'commit' && m.commit && m.commit.collection === 'app.bsky.feed.post' && m.commit.operation !== 'delete') setTimeout(loadLive, 2500);
+      } catch (e) {}
+    };
+    ws.onclose = function () { window.__jetstream = 'closed'; setTimeout(function () { jetstream(Math.min(delay * 2, 5 * 60 * 1000)); }, delay); };
+  })(5000);
+
+  // ---- states --------------------------------------------------------------
+  var STARTERS = ['Tweezer', 'Harry Hood', 'You Enjoy Myself', 'Fluffhead', 'Destiny Unbound', 'Ghost'];
+  function showEmpty() {
+    out.innerHTML =
+      '<div class="state"><h1>What just<br>happened<span class="mark">?</span></h1>' +
+      '<p>Type the song you’re hearing. You’ll get the gap, how often it shows up, where it usually lands in a show, and whether tonight is a big deal.</p>' +
+      '<div class="chips">' + STARTERS.map(function (s) { return '<button type="button" data-name="' + esc(s) + '">' + esc(s) + '</button>'; }).join('') + '</div></div>' +
+      '<div id="landing"></div>';
+    // Show-day opener calls and "today in history" (assets/landing.js).
+    P.crumbs([]);
+    if (P.renderLanding) P.renderLanding(out.querySelector('#landing'));
+    out.querySelector('.chips').addEventListener('click', function (e) {
+      var b = e.target.closest('button'); if (!b) return;
+      listReady.then(function () {
+        var s = songs.filter(function (x) { return x.name === b.dataset.name; })[0];
+        if (s) choose(s.id);
+      });
+    });
+  }
+  function showLoading(name) {
+    out.innerHTML = '<div class="state"><h1>' + esc(name) + '</h1><p>Pulling the history…</p></div>';
+  }
+  function showError(e) {
+    out.innerHTML = '<div class="state"><h1>Couldn’t load that</h1><p>The local Datasette service didn’t answer. Check that it’s running, then try again.</p><div class="err">' + esc(e && e.message || e) + '</div></div>';
+  }
+
+  // ---- significance --------------------------------------------------------
+  // Badges are the point of the page: a fan mid-show wants "is this a big
+  // deal?" before any table. Thresholds follow common phish.net usage: a gap
+  // of 50+ shows is a bustout, 100+ is a major one, 250+ is historic.
+  function badges(core, hist, thisYear, twoYear, jamCount) {
+    var b = [];
+    var gap = Number(core.gap || 0);
+    var lastPlayed = core.last_played;
+    var yrs = yearsBetween(lastPlayed, core.latest_show);
+    var yrsTxt = yrs != null && yrs >= 1 ? ' · ' + (Math.round(yrs * 10) / 10) + ' years' : '';
+
+    if (core.times_played <= 1) {
+      b.push({ cls: 'gold', text: core.times_played === 0 ? 'Never played' : 'Played once', sub: lastPlayed ? 'on ' + longDate(lastPlayed) : '' });
+    } else if (gap >= 250) {
+      b.push({ cls: 'hot', text: 'Historic bustout if played tonight', sub: n(gap) + ' shows since ' + longDate(lastPlayed) + yrsTxt });
+    } else if (gap >= 100) {
+      b.push({ cls: 'hot', text: 'Major bustout if played tonight', sub: n(gap) + ' shows since ' + longDate(lastPlayed) + yrsTxt });
+    } else if (gap >= 50) {
+      b.push({ cls: 'hot', text: 'Bustout if played tonight', sub: n(gap) + ' shows since ' + longDate(lastPlayed) + yrsTxt });
+    } else if (gap >= 20) {
+      b.push({ cls: 'gold', text: 'Overdue', sub: n(gap) + ' shows since ' + longDate(lastPlayed) });
+    }
+
+    var lastGap = hist.length ? Number(hist[0].gap || 0) : 0;
+    if (lastGap >= 50 && gap < 20) {
+      b.push({ cls: 'gold', text: 'Recent bustout', sub: 'came back ' + longDate(hist[0].showdate) + ' after ' + n(lastGap) + ' shows' });
+    }
+
+    if (yearOf(core.debut) === yearOf(core.latest_show) && core.times_played > 0) {
+      b.push({ cls: 'green', text: 'Debuted this year', sub: longDate(core.debut) });
+    } else if (thisYear === 0 && core.times_played > 0 && twoYear > 0) {
+      b.push({ cls: 'cool', text: 'Not yet this year', sub: n(twoYear) + ' plays in the last two years' });
+    } else if (thisYear === 1) {
+      b.push({ cls: 'cool', text: 'Once this year so far', sub: 'of ' + n(core.shows_this_year) + ' shows' });
+    }
+
+    if (core.shows_2y && twoYear / core.shows_2y >= 0.25) {
+      b.push({ cls: 'cool', text: 'Heavy rotation', sub: 'in ' + pct(twoYear, core.shows_2y) + ' of shows, last two years' });
+    }
+
+    if (jamCount >= 15 || (core.times_played >= 20 && jamCount / core.times_played >= 0.12)) {
+      b.push({ cls: 'gold', text: 'Jam vehicle', sub: n(jamCount) + ' jam chart versions' });
+    }
+
+    if (core.artist && core.artist !== 'Phish') {
+      b.push({ cls: '', text: 'Cover', sub: core.artist });
+    }
+    return b;
+  }
+
+  // ---- render --------------------------------------------------------------
+  var showsByYear = null, venues = null, venueById = {};
+  var pickedVenueId = Number(new URLSearchParams(location.search).get('venue')) || null;
+  var lastRender = null;
+  function load(id) {
+    var s = byId[id];
+    showLoading(s ? s.name : '');
+    var byYear = showsByYear ? Promise.resolve(showsByYear) : api('song/shows-by-year').then(function (r) { showsByYear = r; return r; });
+    var venueList = venues ? Promise.resolve(venues) : api('catalog/venues').then(function (r) {
+      venues = r; r.forEach(function (v) { venueById[v.venueid] = v; }); return r;
+    });
+    Promise.all([api('song/core', { id: id }), api('song/history', { id: id }), api('song/segues', { id: id }), byYear, venueList])
+      .then(function (res) { lastRender = res; render(res[0][0], res[1], res[2], res[3]); })
+      .catch(showError);
+  }
+
+  // The venue to compare against: one the user picked, else tonight's venue
+  // from the live posts (matched on "City, ST"), else the latest show's.
+  function currentVenue(core) {
+    if (pickedVenueId && venueById[pickedVenueId]) return venueById[pickedVenueId];
+    if (live.entries && live.entries.length) {
+      var loc = live.entries[0].location.toLowerCase();
+      var hits = venues.filter(function (v) { return (v.city + ', ' + v.state).toLowerCase() === loc; })
+        .sort(function (a, b) { return b.last_show.localeCompare(a.last_show); });
+      if (hits[0]) return hits[0];
+    }
+    return venueById[core.latest_venueid] || null;
+  }
+
+  // Everywhere-vs-here comparison. Rates are plays per show so a venue with
+  // 43 shows and one with 400 read on the same scale.
+  function venueStats(core, hist, venue) {
+    var here = hist.filter(function (h) { return h.venueid === venue.venueid; });
+    var overallRate = core.times_played / Math.max(1, showsSinceDebut);
+    var hereRate = here.length / Math.max(1, venue.shows);
+    var thisRun = here.filter(function (h) { return h.showyear === yearOf(venue.last_show) && venue.shows_this_year > 0; });
+    var latestYear = yearOf(core.latest_show);
+    return {
+      venue: venue, here: here, plays: here.length, shows: venue.shows,
+      hereRate: hereRate, overallRate: overallRate,
+      ratio: overallRate > 0 ? hereRate / overallRate : null,
+      last: here[0] || null, first: here.length ? here[here.length - 1] : null,
+      opened: here.filter(function (h) { return h.opened; }).length,
+      encored: here.filter(function (h) { return h.encored; }).length,
+      thisRun: venue.shows_this_year > 0 && yearOf(venue.last_show) === latestYear ? thisRun : null,
+    };
+  }
+  var showsSinceDebut = 0;
+
+  // A song can appear more than once in one show (Tweezer weaving through a
+  // set, a reprise-style return). phish.net's "times played" counts shows, so
+  // every stat here is per show: one entry per date, flags OR'd together,
+  // the gap taken from the first appearance. Rows are newest-first.
+  function perShow(hist) {
+    var byShow = {}, order = [];
+    hist.forEach(function (h) {
+      var s = byShow[h.showdate];
+      if (!s) {
+        s = byShow[h.showdate] = Object.assign({}, h, { appearances: 0, opened: 0, encored: 0, set2_opened: 0, is_jamchart: 0 });
+        order.push(s);
+      }
+      s.appearances += 1;
+      s.opened = s.opened || h.opened; s.encored = s.encored || h.encored; s.set2_opened = s.set2_opened || h.set2_opened;
+      if (h.is_jamchart) { s.is_jamchart = 1; if (!s.jamchart_description) s.jamchart_description = h.jamchart_description; }
+      if (Number(h.gap) > Number(s.gap)) s.gap = h.gap;
+      if (!s.tracktime && h.tracktime) s.tracktime = h.tracktime;
+      if (Number(h.approx_seconds) > Number(s.approx_seconds || 0)) s.approx_seconds = h.approx_seconds;
+      if (Number(h.duration_ms) > Number(s.duration_ms || 0)) { s.duration_ms = h.duration_ms; s.track_songs = h.track_songs; s.track_title = h.track_title; }
+      if (Number(h.lp_seconds) > Number(s.lp_seconds || 0)) s.lp_seconds = h.lp_seconds;
+      if (h.position < s.position) { s.position = h.position; s.set_label = h.set_label; s.trans_mark = h.trans_mark; }
+    });
+    // One recorded length per show, official LivePhish first, phish.in
+    // second. A phish.in medley track is not a single version; an official
+    // track always is.
+    order.forEach(function (s) {
+      if (Number(s.lp_seconds) > 0) { s.rec_ms = s.lp_seconds * 1000; s.rec_src = 'official'; s.rec_single = true; }
+      else if (Number(s.duration_ms) > 0) { s.rec_ms = Number(s.duration_ms); s.rec_src = 'phish.in'; s.rec_single = Number(s.track_songs) === 1; }
+      else { s.rec_ms = 0; s.rec_src = null; s.rec_single = false; }
+    });
+    return order;
+  }
+
+  var PAGE = 8;
+  function render(core, rawHist, segues, shows) {
+    if (!core) { showError(new Error('Song not found')); return; }
+    P.crumbs([{ text: 'Song' }, { text: core.song }]);
+    var hist = perShow(rawHist);
+    var latestYear = yearOf(core.latest_show);
+    var thisYear = hist.filter(function (h) { return h.showyear === latestYear; }).length;
+    var twoYearCut = new Date(core.latest_show + 'T12:00:00'); twoYearCut.setFullYear(twoYearCut.getFullYear() - 2);
+    var twoYear = hist.filter(function (h) { return new Date(h.showdate + 'T12:00:00') >= twoYearCut; }).length;
+    var opened = hist.filter(function (h) { return h.opened; }).length;
+    var set2 = hist.filter(function (h) { return h.set2_opened; }).length;
+    var encored = hist.filter(function (h) { return h.encored; }).length;
+    var jams = hist.filter(function (h) { return h.is_jamchart; });
+    // The debut row carries the count of shows before the song existed, which
+    // is not a gap in any useful sense, so gap stats skip the first show.
+    var afterDebut = hist.filter(function (h) { return h.showdate !== core.debut; });
+    var gaps = afterDebut.map(function (h) { return Number(h.gap); }).filter(function (g) { return g > 0; });
+    var avgGap = gaps.length ? Math.round(gaps.reduce(function (a, b) { return a + b; }, 0) / gaps.length) : null;
+    var maxGapRow = afterDebut.reduce(function (m, h) { return Number(h.gap) > Number(m.gap || 0) ? h : m; }, {});
+    var timed = hist.filter(function (h) { return /^\d+:\d\d$/.test(h.tracktime || ''); })
+      .sort(function (a, b) { return toSec(b.tracktime) - toSec(a.tracktime); })[0];
+    var longestPost = hist.filter(function (h) { return Number(h.approx_seconds) > 0; })
+      .sort(function (a, b) { return b.approx_seconds - a.approx_seconds; })[0];
+    // Recorded lengths (phish.in). Single-song tracks only for the ranking,
+    // so a "Tweezer > Jam > Tweezer" medley does not top the list.
+    var recorded = hist.filter(function (h) { return h.rec_ms > 0; });
+    var singles = recorded.filter(function (h) { return h.rec_single; });
+    var longestRec = singles.slice().sort(function (a, b) { return b.rec_ms - a.rec_ms; });
+    var recent2y = singles.filter(function (h) { return new Date(h.showdate + 'T12:00:00') >= twoYearCut; })
+      .map(function (h) { return h.rec_ms; }).sort(function (a, b) { return a - b; });
+    var typicalMs = recent2y.length ? recent2y[Math.floor(recent2y.length / 2)] : null;
+    var allRecMs = singles.map(function (h) { return h.rec_ms; }).sort(function (a, b) { return a - b; });
+    var typicalAllMs = allRecMs.length ? allRecMs[Math.floor(allRecMs.length / 2)] : null;
+    songLength = { typicalMs: typicalMs || typicalAllMs, longest: longestRec[0] || null, songid: core.songid };
+    // "1 in N shows everywhere" counts only shows since the song existed.
+    var debutYear = yearOf(core.debut) || 0;
+    showsSinceDebut = shows.reduce(function (a, r) { return a + (r.year >= debutYear ? r.n : 0); }, 0);
+    var b = badges(core, hist, thisYear, twoYear, jams.length);
+    var venue = currentVenue(core);
+    var vs = venue ? venueStats(core, hist, venue) : null;
+    if (vs) {
+      if (vs.shows >= 10 && vs.plays === 0 && core.times_played >= 10) {
+        b.push({ cls: 'cool', text: 'Never at ' + venue.venue, sub: 'in ' + n(vs.shows) + ' shows there' });
+      } else if (vs.plays >= 3 && vs.ratio >= 1.5) {
+        b.push({ cls: 'gold', text: venue.venue + ' favorite', sub: n(vs.plays) + ' of ' + n(vs.shows) + ' shows there, ' + (Math.round(vs.ratio * 10) / 10) + '× its usual rate' });
+      }
+      if (vs.thisRun && vs.thisRun.length) {
+        b.push({ cls: 'cool', text: 'Already played this run', sub: vs.thisRun.map(function (h) { return fmtDate(h.showdate); }).join(', ') });
+      }
+    }
+    var gapHot = Number(core.gap) >= 50;
+
+    // History strip: every year from debut to the latest show, bar height =
+    // plays that year relative to the song's busiest year. Years Phish did
+    // not play at all (2001-02 hiatus, 2005-08 breakup) are drawn as a dash
+    // so an empty year that was not the band's fault does not read as a gap.
+    var playsByYear = {}; hist.forEach(function (h) { playsByYear[h.showyear] = (playsByYear[h.showyear] || 0) + 1; });
+    var showYears = {}; shows.forEach(function (r) { showYears[r.year] = r.n; });
+    var y0 = yearOf(core.debut) || latestYear, years = [];
+    for (var y = y0; y <= latestYear; y++) years.push(y);
+    var peak = Math.max.apply(null, years.map(function (y) { return playsByYear[y] || 0; }).concat([1]));
+    var bars = years.map(function (y) {
+      var p = playsByYear[y] || 0, cls = p ? '' : 'zero';
+      if (!showYears[y]) cls = 'hiatus';
+      if (y === latestYear) cls += ' now';
+      var tip = y + ': ' + (showYears[y] ? p + ' of ' + showYears[y] + ' shows' : 'no shows');
+      return '<div class="bar ' + cls + '" tabindex="0" aria-label="' + esc(tip) + '"><i style="height:' + Math.max(p ? 6 : 0, Math.round(100 * p / peak)) + '%"></i><span class="tip">' + esc(tip) + '</span></div>';
+    }).join('');
+
+    var gapSub = gapHot ? 'since ' + shortMonth(core.last_played) : 'avg ' + (avgGap != null ? n(avgGap) : '–');
+
+    var html =
+      '<article class="song">' +
+      '<header class="title">' +
+        '<div class="eyebrow">' + (core.rank <= core.ranked_of ? '#' + n(core.rank) + ' most played of ' + n(core.ranked_of) : 'Song') + '</div>' +
+        '<h1><a href="' + esc(songUrl(core.slug)) + '" target="_blank" rel="noopener">' + esc(core.song) + '</a></h1>' +
+        (core.artist && core.artist !== 'Phish' ? '<div class="by">originally by <b>' + esc(core.artist) + '</b></div>' : '') +
+      '</header>' +
+      (b.length ? '<div class="badges">' + b.map(function (x) {
+        return '<span class="badge ' + x.cls + '"><span class="dot"></span>' + esc(x.text) + (x.sub ? ' <small>' + esc(x.sub) + '</small>' : '') + '</span>';
+      }).join('') + '</div>' : '') +
+      '<div class="lead">' +
+        '<div class="cell"><div class="num' + (gapHot ? ' hot' : '') + '">' + n(core.gap) + '</div><div class="lab">Gap</div><div class="sub">' + esc(gapSub) + '</div></div>' +
+        '<div class="cell"><div class="num">' + n(core.times_played) + '</div><div class="lab">Played</div><div class="sub">since ' + (yearOf(core.debut) || '–') + '</div></div>' +
+        '<div class="cell"><div class="num">' + n(thisYear) + '</div><div class="lab">' + esc(String(latestYear)) + '</div><div class="sub">of ' + n(core.shows_this_year) + ' shows</div></div>' +
+      '</div>' +
+
+      '<section class="strip"><div class="head"><h2>Plays by year</h2><div class="legend"><i></i>plays <i class="now"></i>this year</div></div>' +
+        '<div class="bars">' + bars + '</div>' +
+        '<div class="axis"><span>' + y0 + '</span>' + (years.length > 2 ? '<span>' + years[Math.floor(years.length / 2)] + '</span>' : '') + '<span>' + latestYear + '</span></div>' +
+        '<div class="note">Peak year: ' + peakYear(playsByYear) + '. Longest gap: ' + (maxGapRow.gap ? n(maxGapRow.gap) + ' shows, ending ' + fmtDate(maxGapRow.showdate) : '–') + '.</div>' +
+      '</section>' +
+
+      '<section class="sec"><div class="head"><h2>Where it lands</h2><span>share of ' + n(hist.length) + ' shows</span></div><div class="grid">' +
+        stat(pct(opened, hist.length), 'opens the show', n(opened) + '×') +
+        stat(pct(set2, hist.length), 'opens set 2', n(set2) + '×') +
+        stat(pct(encored, hist.length), 'encore', n(encored) + '×') +
+        stat(n(twoYear), 'plays, last 2 years', 'of ' + n(core.shows_2y) + ' shows') +
+        stat(avgGap != null ? n(avgGap) : '–', 'average gap', 'shows between plays') +
+        (typicalMs
+          ? stat(mmss(typicalMs), 'typical length', 'median of ' + n(recent2y.length) + ' recorded, last 2 years')
+          : typicalAllMs
+            ? stat(mmss(typicalAllMs), 'typical length', 'median of ' + n(allRecMs.length) + ' recordings')
+            : longestPost
+              ? stat('≈' + approxMin(longestPost.approx_seconds), 'longest by post timing', fmtDate(longestPost.showdate))
+              : stat(timed ? esc(timed.tracktime) : '–', 'longest logged', timed ? fmtDate(timed.showdate) : 'no times logged')) +
+      '</div></section>' +
+
+      (longestRec.length ? '<section class="sec"><div class="head"><h2>Longest versions</h2><span>' + n(singles.length) + ' recorded · LP LivePhish, PI phish.in</span></div>' +
+        '<ol class="perf">' + longestRec.slice(0, 5).map(function (h) { return perfRow(h, { rank: true }); }).join('') + '</ol>' +
+        '</section>' : '') +
+
+      (vs ? venueSection(core, vs) : '') +
+
+      '<section class="sec"><div class="head"><h2>Recent performances</h2><a href="' + esc(songUrl(core.slug)) + '/history" target="_blank" rel="noopener">full history on phish.net</a></div>' +
+        '<ol class="perf" id="perf">' + hist.slice(0, PAGE).map(perfRow).join('') + '</ol>' +
+        (hist.length > PAGE ? '<button type="button" class="more" id="moreBtn">Show ' + Math.min(PAGE, hist.length - PAGE) + ' more of ' + n(hist.length) + '</button>' : '') +
+      '</section>' +
+
+      (jams.length ? '<section class="sec"><div class="head"><h2>Latest jam chart version</h2><span>' + n(jams.length) + ' total</span></div>' +
+        '<div class="jam"><div class="when"><a href="' + esc(jams[0].permalink) + '" target="_blank" rel="noopener">' + longDate(jams[0].showdate) + '</a> · ' + esc(jams[0].venue) + ', ' + esc(jams[0].city) + '</div>' +
+        '<p>' + safeNote(jams[0].jamchart_description || 'Flagged as a notable version.') + '</p></div></section>' : '') +
+
+      '<section class="sec"><div class="head"><h2>Segues</h2><span>direct transitions only</span></div><div class="segues">' +
+        segList('Comes out of', segues.filter(function (x) { return x.dir === 'from'; }), true) +
+        segList('Goes into', segues.filter(function (x) { return x.dir === 'into'; }), false) +
+      '</div></section>' +
+
+      '<p class="foot-note">Data as of ' + (core.last_refresh ? new Date(core.last_refresh).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : 'last refresh') + ' · latest show on file ' + longDate(core.latest_show) + '</p>' +
+      '</article>';
+
+    out.innerHTML = html;
+
+    var shown = PAGE;
+    var moreBtn = $('moreBtn');
+    if (moreBtn) moreBtn.addEventListener('click', function () {
+      $('perf').insertAdjacentHTML('beforeend', hist.slice(shown, shown + PAGE).map(perfRow).join(''));
+      shown += PAGE;
+      if (shown >= hist.length) moreBtn.remove();
+      else moreBtn.textContent = 'Show ' + Math.min(PAGE, hist.length - shown) + ' more of ' + n(hist.length);
+    });
+    var changeBtn = $('venueChange');
+    if (changeBtn) {
+      var pick = $('venuePick'), input = $('venueInput');
+      changeBtn.addEventListener('click', function () { pick.classList.toggle('open'); if (pick.classList.contains('open')) input.focus(); });
+      function applyVenue() {
+        var want = input.value.trim().toLowerCase();
+        var hit = venues.filter(function (v) { return (v.venue + ' · ' + v.city + ', ' + v.state).toLowerCase() === want; })[0] ||
+                  venues.filter(function (v) { return v.venue.toLowerCase().indexOf(want) >= 0 || v.city.toLowerCase().indexOf(want) >= 0; })[0];
+        if (!hit) return;
+        pickedVenueId = hit.venueid;
+        var u = new URL(location.href); u.searchParams.set('venue', hit.venueid); history.replaceState(null, '', u);
+        render(lastRender[0][0], lastRender[1], lastRender[2], lastRender[3]);
+      }
+      $('venueApply').addEventListener('click', applyVenue);
+      input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); applyVenue(); } });
+      var reset = $('venueReset');
+      if (reset) reset.addEventListener('click', function () {
+        pickedVenueId = null;
+        var u = new URL(location.href); u.searchParams.delete('venue'); history.replaceState(null, '', u);
+        render(lastRender[0][0], lastRender[1], lastRender[2], lastRender[3]);
+      });
+    }
+    out.querySelectorAll('.seg button').forEach(function (btn) {
+      btn.addEventListener('click', function () { choose(Number(btn.dataset.id)); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+    });
+  }
+
+  var songLength = null;
+  function oneIn(rate) { return rate > 0 ? '1 in ' + n(Math.round(1 / rate)) : 'never'; }
+  function venueSection(core, vs) {
+    var v = vs.venue;
+    var why = pickedVenueId ? 'picked' : (live.entries && live.entries.length ? 'tonight' : 'latest show');
+    var line;
+    if (vs.plays === 0) {
+      line = '<b>Never played here</b> across ' + n(vs.shows) + ' Phish shows at this venue' + (vs.shows >= 5 ? ' since ' + yearOf(v.first_show) : '') + '.';
+    } else {
+      line = 'Played at <b>' + n(vs.plays) + ' of ' + n(vs.shows) + '</b> shows here (' + pct(vs.plays, vs.shows) + '), <span class="vs">vs ' + oneIn(vs.overallRate) + ' shows everywhere' +
+        (vs.ratio >= 1.5 ? ', so it comes out more here' : vs.ratio && vs.ratio <= 0.6 ? ', so it comes out less here' : '') + '.</span>';
+    }
+    var hereShows = vs.here.length;
+    var grid =
+      stat(vs.last ? fmtDate(vs.last.showdate) : '–', 'last time here', vs.last ? slotName(vs.last) : '') +
+      stat(vs.first ? fmtDate(vs.first.showdate) : '–', 'first time here', vs.first && vs.plays > 1 ? n(vs.plays) + ' times total' : '') +
+      stat(n(vs.opened) + ' / ' + n(vs.encored), 'opened / encored here', hereShows ? 'of ' + n(hereShows) + ' plays here' : '') +
+      (vs.thisRun !== null ? stat(vs.thisRun.length ? n(vs.thisRun.length) + '×' : '0', 'this run so far', v.shows_this_year + ' show' + (v.shows_this_year === 1 ? '' : 's') + ' here in ' + yearOf(v.last_show)) : '');
+    var list = vs.here.slice(0, 5).map(function (h) { return perfRow(h, { sameVenue: true }); }).join('');
+    var datalist = '<datalist id="venueList">' + venues.slice(0, 400).map(function (x) { return '<option value="' + esc(x.venue + ' · ' + x.city + ', ' + x.state) + '"></option>'; }).join('') + '</datalist>';
+    return '<section class="sec" id="venueSec"><div class="head"><h2>At <a href="' + P.venuePage(v.venueid) + '">' + esc(v.venue) + '</a></h2>' +
+      '<button type="button" class="change" id="venueChange">' + esc(v.city + ', ' + v.state) + ' · ' + why + ' · change</button></div>' +
+      '<div class="venue-pick" id="venuePick"><input id="venueInput" list="venueList" placeholder="Venue or city" aria-label="Venue"><button type="button" id="venueApply">Go</button>' +
+      (pickedVenueId ? '<button type="button" id="venueReset">Auto</button>' : '') + '</div>' + datalist +
+      '<div class="venue-line">' + line + '</div>' +
+      '<div class="grid">' + grid + '</div>' +
+      (list ? '<ol class="perf" style="margin-top:10px">' + list + '</ol>' : '') +
+      '<a class="more" href="' + P.venuePage(v.venueid) + '">' + (vs.here.length > 5 ? n(vs.here.length - 5) + ' more here · ' : '') + 'venue page</a>' +
+      '</section>';
+  }
+  function stat(v, k, small) { return '<div class="stat"><div class="v">' + v + (small ? '<small>' + esc(small) + '</small>' : '') + '</div><div class="k">' + esc(k) + '</div></div>'; }
+  function toSec(t) { var p = t.split(':'); return Number(p[0]) * 60 + Number(p[1]); }
+  function peakYear(byYear) {
+    var best = null; Object.keys(byYear).forEach(function (y) { if (!best || byYear[y] > byYear[best]) best = y; });
+    return best ? best + ' (' + n(byYear[best]) + ')' : '–';
+  }
+  function slotName(h) {
+    if (h.encored) return 'encore';
+    if (h.opened) return 'set 1 opener';
+    if (h.set2_opened) return 'set 2 opener';
+    return 'set ' + h.set_label + ' · #' + h.position;
+  }
+  // The length badge, linked to the recording it was measured from. A PI
+  // length means phish.in holds that show, so /<date> there always resolves;
+  // an LP length means a LivePhish release exists, but only 2003 and later
+  // have an address derivable from the date, so older ones stay unlinked.
+  // phish.in has no stable per-track address, so both links land on the show.
+  function recBadge(h) {
+    var official = h.rec_src === 'official';
+    var date = String(h.showdate);
+    var href = official ? P.livePhishUrl(date) : 'https://phish.in/' + date;
+    var title = official
+      ? 'official length from the LivePhish release'
+      : 'recording length on phish.in' + (!h.rec_single ? ': ' + esc(h.track_title || '') : '');
+    var body = mmss(h.rec_ms) + ' <small>' +
+      (official ? 'LP' : 'PI' + (!h.rec_single ? ', ' + h.track_songs + '-song track' : '')) + '</small>';
+    var cls = 'rec' + (official ? ' official' : '');
+    return href
+      ? '<a class="' + cls + ' src" href="' + esc(href) + '" target="_blank" rel="noopener" title="' +
+        title + ' — open it">' + body + '</a>'
+      : '<span class="' + cls + '" title="' + title + '">' + body + '</span>';
+  }
+  function perfRow(h, opts) {
+    var gap = Number(h.gap || 0);
+    var where = opts && opts.sameVenue ? '<span class="year">' + esc(String(h.showyear)) + ' run</span>' : esc(h.venue) + ' · ' + esc(h.city) + (h.state ? ', ' + esc(h.state) : '');
+    return '<li>' +
+      '<a class="date" href="' + P.showPage(h.showdate) + '" title="show page">' + fmtDate(h.showdate) + '</a>' +
+      '<span class="venue">' + where + '</span>' +
+      '<span class="gap' + (gap >= 50 ? ' hot' : '') + '">gap ' + n(gap) + '</span>' +
+      '<span class="slot"><span>' + esc(slotName(h)) + (h.appearances > 1 ? ' · ' + h.appearances + ' appearances' : '') + '</span>' +
+      (h.rec_ms > 0
+        ? recBadge(h)
+        : Number(h.approx_seconds) > 0 ? '<span class="approx" title="post-to-post timing from the phish.com Bluesky account">≈' + approxMin(h.approx_seconds) + ' <small>BS</small></span>'
+        : (h.bsky_closer ? '<span title="set closer: the next post came after the break">no post timing</span>' : '')) +
+      (h.tracktime ? '<span>' + esc(h.tracktime) + '</span>' : '') + (h.is_jamchart ? '<span class="jc">jam chart</span>' : '') + (/^(>|->)$/.test(String(h.trans_mark || '').trim()) ? '<span>segues <span class="mark">' + esc(h.trans_mark.trim()) + '</span></span>' : '') + '</span>' +
+      (h.footnote ? '<span class="foot">' + safeNote(h.footnote) + '</span>' : '') +
+    '</li>';
+  }
+  function segList(title, rows, isFrom) {
+    var top = rows.slice(0, 5);
+    return '<div class="seg"><h3>' + esc(title) + '</h3>' + (top.length ?
+      '<ol>' + top.map(function (r) {
+        var mark = esc(String(r.mark || '').trim());
+        return '<li><button type="button" data-id="' + r.other_id + '">' + (isFrom ? esc(r.other) + ' <span class="mark">' + mark + '</span>' : '<span class="mark">' + mark + '</span> ' + esc(r.other)) + '</button><span class="n">' + n(r.n) + '×</span></li>';
+      }).join('') + '</ol>' : '<div class="none">none on record</div>') + '</div>';
+  }
+
+  // ---- boot ----------------------------------------------------------------
+  var initial = new URLSearchParams(location.search).get('song');
+  showEmpty();
+  if (initial) {
+    q.value = initial; clearBtn.hidden = false;
+    listReady.then(function () {
+      var hit = songs.filter(function (s) { return s.key === initial.toLowerCase(); })[0] || match(initial)[0];
+      if (hit) { currentId = hit.id; q.value = hit.name; load(hit.id); renderLive(); }
+    });
+  } else {
+    q.focus();
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#15121c">
+<title>Year · Phish.net local cache</title>
+<link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/icon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link rel="manifest" href="/assets/manifest.json">
+<meta name="apple-mobile-web-app-title" content="Phish">
+<meta name="application-name" content="Phish stats">
+<link rel="stylesheet" href="/assets/app.css">
+<style>
+  .title .by a { color: var(--ink); font-weight: 500; }
+  .title .by a:hover { color: var(--blue); }
+  .perf .venue a:hover { color: var(--blue); }
+  .perf .slot .bo { color: var(--red); }
+  .perf .slot .rec { color: var(--green); }
+  .perf .gap .rec { color: var(--green); font-weight: 500; }
+  .perf .gap .rec small { font-weight: 400; opacity: .7; }
+  .badges { margin-top: 14px; }
+
+  /* The era's years, so the next one is a click. The middle scrolls on a
+     phone; the arrows stay put at either end. */
+  .yearstrip { display: flex; align-items: center; gap: 6px; margin-top: 16px; }
+  /* position: relative so the current year's offsetLeft is measured against
+     the scroller, which is what scrolls it into view. */
+  .yearstrip .ys { position: relative; flex: 1 1 auto; min-width: 0; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 1px; }
+  .yearstrip .ys::-webkit-scrollbar { display: none; }
+  .yearstrip .y, .yearstrip .step { display: inline-flex; align-items: center; justify-content: center; min-height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px; font: 500 .8rem var(--mono); color: var(--ink-dim); background: var(--surface); white-space: nowrap; flex: none; }
+  .yearstrip .y:hover, .yearstrip .step:hover { color: var(--ink); border-color: var(--ink-dim); }
+  .yearstrip .y.now { color: var(--ink); border-color: var(--red); background: var(--surface-2); }
+  .yearstrip .step.off { opacity: .3; }
+  .yearstrip .step.off:hover { color: var(--ink-dim); border-color: var(--line); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="topbar">
+    <a class="brand" href="/song" title="Home: a fresh landing page">Phish stats<img src="/assets/icon.svg" alt="" width="24" height="24"></a>
+    <nav class="crumbs" id="crumbs" aria-label="Breadcrumb"></nav>
+    <nav class="quick" aria-label="Quick links"><a class="home" href="/song">Home</a><a href="/show/latest">Latest<span class="long"> show</span></a><a href="/show/random">Random<span class="long"> show</span></a><a href="/eras">Eras</a></nav>
+  </header>
+  <form class="search" role="search" autocomplete="off" id="searchForm">
+    <div class="search-row">
+      <input id="q" type="search" placeholder="Song, venue, city, or date" aria-label="Search" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="search">
+      <button type="button" class="clear" id="clearBtn" aria-label="Clear" hidden>&times;</button>
+      <div class="suggest" id="suggest" role="listbox" hidden></div>
+    </div>
+    <div class="search-hint"><span>Phish shows only, official stats</span><span></span></div>
+  </form>
+
+  <main id="out" aria-live="polite"></main>
+
+  <p class="foot-note">{% include "_compliance.html" %}</p>
+</div>
+
+<script src="/assets/app.js"></script>
+<script src="/assets/season-stats.js?v=dev"></script>
+<script src="/assets/period.js?v=dev"></script>
+<script>
+(function () {
+  'use strict';
+  var P = window.Phish;
+  P.mountSearch({ input: document.getElementById('q'), suggest: document.getElementById('suggest'), clear: document.getElementById('clearBtn') });
+  var year = Number(location.pathname.split('/').pop());
+  var out = document.getElementById('out');
+  if (!year) { out.innerHTML = P.errorState(new Error('Expected /year/YYYY'), 'Not a year'); return; }
+  P.renderPeriod({ kind: 'year', year: year, label: String(year) }, out);
+})();
+</script>
+</body>
+</html>
