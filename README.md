@@ -74,7 +74,7 @@ Two tests that physically replace the database file skip on Windows (SQLite's Wi
 
 ## Deploying
 
-Every push and pull request runs the suite in GitHub Actions. A push to `main` also builds the deployable tarball with `scripts/build-tarball.sh` (the committed tree, asset references stamped with a hash of the assets, a `build.json` at the root), signs it with an OpenSSH key, and uploads it to the object store the site's servers poll every two minutes. Each server verifies the signature against `deploy/allowed_signers`, swaps the application directory, restarts, and rolls back on its own if the new build does not answer within 30 seconds. `/api/version` on the site shows the commit that is serving.
+Every push and pull request runs the suite in GitHub Actions. A push to `main` also builds the deployable tarball with `scripts/build-tarball.sh` (the committed tree, asset references stamped with a hash of the assets, a `build.json` at the root), signs it with an OpenSSH key, attests its build provenance, and publishes it as a GitHub Release (`deploy-<run>`, the newest thirty are kept). The site's servers poll the latest release every two minutes; each verifies the signature against `deploy/allowed_signers`, swaps the application directory, restarts, and rolls back on its own if the new build does not answer within 30 seconds. `/api/version` on the site shows the commit that is serving. Anyone can check a release's provenance with `gh attestation verify app.tgz --owner phishstats-app`.
 
 To run your own copy, `bash scripts/build-tarball.sh <clone> <out>` produces the same `app.tgz`; unpack it wherever you like and start `web.js` there.
 

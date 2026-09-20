@@ -1,0 +1,12 @@
+version: 2
+updates:
+  # The workflow's actions are pinned to commit SHAs; Dependabot moves the pins
+  # and keeps the version comment beside each one current.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        patterns: ["*"]

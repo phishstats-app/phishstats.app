@@ -4,26 +4,39 @@ on:
   push:
   pull_request:
 
+# Actions are pinned to full commit SHAs (the version is the comment beside
+# each); Dependabot keeps them current. The default token can only read.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
       - run: node --version
       - run: npm test
 
+  # On a push to main: build the tarball from the commit, sign it, attest its
+  # provenance, and publish it as a GitHub Release. The site's servers poll
+  # the latest release and install it after checking the signature; nothing
+  # here has credentials for them, and no secret expires.
   deploy:
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build the tarball
         run: bash scripts/build-tarball.sh "$PWD" "$RUNNER_TEMP/build" | tee "$RUNNER_TEMP/build.txt"
-      - name: Sign it
+      - name: Sign it, and check the signature against the published key
         env:
           SIGNING_KEY: ${{ secrets.PHISH_APP_SIGNING_KEY }}
         run: |
@@ -34,14 +47,25 @@ jobs:
           rm -f "$RUNNER_TEMP/signing-key"
           ssh-keygen -Y verify -f deploy/allowed_signers -I phish-ci -n phish-app \
             -s "$RUNNER_TEMP/build/app.tgz.sig" < "$RUNNER_TEMP/build/app.tgz"
-      - name: Upload the tarball, then its signature
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ runner.temp }}/build/app.tgz
+      - name: Publish the release
         env:
-          PAR: ${{ secrets.PHISH_APP_PAR }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          test -n "$PAR"
-          curl -fsS -T "$RUNNER_TEMP/build/app.tgz" "${PAR}app.tgz"
-          curl -fsS -T "$RUNNER_TEMP/build/app.tgz.sig" "${PAR}app.tgz.sig"
+          tag="deploy-${{ github.run_number }}"
+          # Draft first so the servers never see a release whose assets are
+          # still uploading; publishing flips it to "latest" in one step.
+          gh release create "$tag" --draft --target "$GITHUB_SHA" --title "$tag" \
+            --notes "$(printf 'Built from %s.\n\n```\n%s\n```\n' "$GITHUB_SHA" "$(cat "$RUNNER_TEMP/build.txt")")" \
+            "$RUNNER_TEMP/build/app.tgz" "$RUNNER_TEMP/build/app.tgz.sig"
+          gh release edit "$tag" --draft=false --latest
+          # Keep the newest thirty; the tags go with the releases.
+          gh release list --limit 200 --json tagName,isDraft --jq '.[] | select(.isDraft | not) | .tagName' \
+            | tail -n +31 | while read -r old; do gh release delete "$old" --yes --cleanup-tag; done
       - name: Summary
         run: |
-          { echo '## Deployed'; echo; cat "$RUNNER_TEMP/build.txt"; } >> "$GITHUB_STEP_SUMMARY"
+          { echo "## Released deploy-${{ github.run_number }}"; echo; cat "$RUNNER_TEMP/build.txt"; } >> "$GITHUB_STEP_SUMMARY"
