@@ -72,6 +72,12 @@ npm test
 
 Two tests that physically replace the database file skip on Windows (SQLite's Windows VFS opens without `FILE_SHARE_DELETE`) and run on Linux.
 
+## Deploying
+
+Every push and pull request runs the suite in GitHub Actions. A push to `main` also builds the deployable tarball with `scripts/build-tarball.sh` (the committed tree, asset references stamped with a hash of the assets, a `build.json` at the root), signs it with an OpenSSH key, and uploads it to the object store the site's servers poll every two minutes. Each server verifies the signature against `deploy/allowed_signers`, swaps the application directory, restarts, and rolls back on its own if the new build does not answer within 30 seconds. `/api/version` on the site shows the commit that is serving.
+
+To run your own copy, `bash scripts/build-tarball.sh <clone> <out>` produces the same `app.tgz`; unpack it wherever you like and start `web.js` there.
+
 ## History
 
 The project started from Phish.net's API example repository and grew into its own thing; nothing of the original code remains. The code is under the MIT license (`LICENSE`). The data is not: it stays under its sources' terms, listed above. The bundled fonts (Fraunces, IBM Plex Mono, Work Sans) are under the SIL Open Font License; `assets/fonts/OFL.txt` has the notice and the license.
