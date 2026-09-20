@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { initDb } = require('../db/schema');
 const { upsertSongs } = require('../db/queries');
-const { normalizeTrack, fetchTracksSince, syncPhishin } = require('../lib/phishin');
+const { normalizeTrack, fetchTracksSince, syncPhishin, USER_AGENT } = require('../lib/phishin');
 
 function song(id, slug, title) { return { id, slug, title }; }
 // Shapes copied from the phish.in v2 API, trimmed to what we read.
@@ -124,4 +124,14 @@ test('syncPhishin defaults to the last 30 days once the table has data, and ever
   const later = await syncPhishin(db, fetchImpl, { delayMs: 0, now: new Date('2026-09-05T12:00:00Z') });
   assert.equal(later.since, '2026-08-06');
   db.close();
+});
+
+test('every request to phish.in identifies the site, as its maintainer asked', async () => {
+  // 2026-09-20: "Cadence sounds fine. User Agent would be appreciated!"
+  const seen = [];
+  const fetchImpl = async (url, options) => { seen.push(options); return { ok: true, json: async () => page([TRACKS[0]], 1, 1) }; };
+  await fetchTracksSince(fetchImpl, { since: null, perPage: 3, delayMs: 0 });
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].headers['User-Agent'], USER_AGENT);
+  assert.match(USER_AGENT, /^phishstats\.app\/\S+ \(\+https:\/\/phishstats\.app; [^)]+@[^)]+\)$/);
 });
