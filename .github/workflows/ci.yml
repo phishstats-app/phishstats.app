@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --version
+      - run: npm test
+
+  deploy:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the tarball
+        run: bash scripts/build-tarball.sh "$PWD" "$RUNNER_TEMP/build" | tee "$RUNNER_TEMP/build.txt"
+      - name: Sign it
+        env:
+          SIGNING_KEY: ${{ secrets.PHISH_APP_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s\n' "$SIGNING_KEY" > "$RUNNER_TEMP/signing-key"
+          ssh-keygen -Y sign -f "$RUNNER_TEMP/signing-key" -n phish-app "$RUNNER_TEMP/build/app.tgz"
+          rm -f "$RUNNER_TEMP/signing-key"
+          ssh-keygen -Y verify -f deploy/allowed_signers -I phish-ci -n phish-app \
+            -s "$RUNNER_TEMP/build/app.tgz.sig" < "$RUNNER_TEMP/build/app.tgz"
+      - name: Upload the tarball, then its signature
+        env:
+          PAR: ${{ secrets.PHISH_APP_PAR }}
+        run: |
+          set -euo pipefail
+          test -n "$PAR"
+          curl -fsS -T "$RUNNER_TEMP/build/app.tgz" "${PAR}app.tgz"
+          curl -fsS -T "$RUNNER_TEMP/build/app.tgz.sig" "${PAR}app.tgz.sig"
+      - name: Summary
+        run: |
+          { echo '## Deployed'; echo; cat "$RUNNER_TEMP/build.txt"; } >> "$GITHUB_STEP_SUMMARY"
