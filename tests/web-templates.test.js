@@ -13,7 +13,9 @@ const ROOT = path.join(__dirname, '..');
 // The file opens with a {# ... #} Jinja comment addressed to whoever edits it.
 // That is not part of the notice and must not reach a page; everything after
 // it must reach every page unchanged.
-const complianceRaw = fs.readFileSync(path.join(ROOT, 'templates', '_compliance.html'), 'utf8');
+// Normalised the way the server reads it: a checkout on Windows has CRLF on
+// disk, the served pages are always LF, and the comparison below is verbatim.
+const complianceRaw = fs.readFileSync(path.join(ROOT, 'templates', '_compliance.html'), 'utf8').replace(/\r\n/g, '\n');
 const compliance = complianceRaw.replace(/\{#[\s\S]*?#\}/g, '').trim();
 
 test('every registered page loads, and the original five are still there', () => {
