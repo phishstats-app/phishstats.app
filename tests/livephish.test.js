@@ -75,6 +75,20 @@ test('syncLivePhish resolves the link for shows that have one, stores tracks, an
   db.close();
 });
 
+test('parseLivePhishPage decodes each entity in a title exactly once', () => {
+  const page = ['<h6>Set One</h6>',
+    track('Harry Hood &amp; Friends', 600),
+    track('It&#39;s Ice', 500),
+    track('Dave&rsquo;s Energy Guide', 400),
+    // A literal "&amp;quot;" on the page is the text "&quot;", not a quote
+    // mark: the output of one decode must never be fed to the next.
+    track('Say &amp;quot;Hi&amp;quot; &amp;#39;', 300),
+  ].join('\n');
+  assert.deepEqual(parseLivePhishPage(page).map((t) => t.title), [
+    'Harry Hood & Friends', "It's Ice", "Dave's Energy Guide", 'Say &quot;Hi&quot; &#39;',
+  ]);
+});
+
 test('rematchUnmatched decodes stored entities and retries against the catalog', () => {
   const { rematchUnmatched } = require('../lib/livephish');
   const db = initDb(':memory:');
