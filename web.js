@@ -221,6 +221,12 @@ function createWebServer({ db, rootDir = __dirname, build = readBuild(rootDir) }
       if (venue) {
         const id = decodeSegment(venue[1]);
         if (id === null || !VENUE_ID.test(id)) return notFound(res, method);
+        // A venue Phish.net aliases under another (1692 -> 777) lives at its
+        // root's URL. 302, not 301: Phish.net can drop an alias. A database
+        // published before the venues table existed just serves the page.
+        let root = null;
+        try { const r = db.run('venue/root', { params: { v: Number(id) } }); root = r.length ? r[0].root : null; } catch (e) { root = null; }
+        if (root !== null && root !== Number(id)) return redirect(res, '/venue/' + root, method);
         return sendHtml(res, pages.venue, method, req.headers['if-none-match']);
       }
 

@@ -64,9 +64,12 @@ test('the transitioned endpoints are still exactly the 35 the pages had', () => 
 
 test('nothing on the added-after list is a name that no longer exists', () => {
   // A stale name here would exempt nothing and quietly shrink the count above,
-  // so the list is checked against the registry rather than trusted.
+  // so the list is checked against the registry rather than trusted. A name
+  // may be a statement the server runs itself (venue/root, for web.js's
+  // venue redirect) rather than a public endpoint.
+  const { STATEMENTS } = require('../lib/web/statements');
   for (const name of ADDED_AFTER_TRANSITION) {
-    assert.ok(ENDPOINTS[name], `${name} is listed as added later but is not an endpoint`);
+    assert.ok(ENDPOINTS[name] || STATEMENTS[name], `${name} is listed as added later but is neither an endpoint nor a statement`);
   }
 });
 

@@ -29,7 +29,7 @@ test('initDb creates all expected tables', () => {
     .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
     .all();
   const names = rows.map((r) => r.name);
-  assert.deepEqual(names, ['bsky_setlist_posts', 'livephish_tracks', 'phingo_cards', 'phishin_track_songs', 'phishin_tracks', 'recorded_lengths', 'scheduled_shows', 'setlist_items', 'shows', 'songs', 'sync_state']);
+  assert.deepEqual(names, ['bsky_setlist_posts', 'livephish_tracks', 'phingo_cards', 'phishin_track_songs', 'phishin_tracks', 'recorded_lengths', 'scheduled_shows', 'setlist_items', 'shows', 'songs', 'sync_state', 'venues']);
   db.close();
 });
 

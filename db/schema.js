@@ -52,6 +52,20 @@ function initDb(dbPath) {
       exclude INTEGER
     );
 
+    -- Phish.net's venue list. alias names the venue this one rolls up into
+    -- (1692 Jim Whelan Boardwalk Hall -> 777 Boardwalk Hall); root is the end
+    -- of that chain, and is what shows.venueid holds (lib/venues.js).
+    CREATE TABLE IF NOT EXISTS venues (
+      venueid INTEGER PRIMARY KEY,
+      venuename TEXT,
+      city TEXT,
+      state TEXT,
+      country TEXT,
+      alias INTEGER,
+      root INTEGER NOT NULL,
+      updated_at TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS setlist_items (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       showid INTEGER NOT NULL,
@@ -242,6 +256,7 @@ function initDb(dbPath) {
   addColumnIfMissing(db, 'bsky_setlist_posts', 'tz', 'TEXT');
   addColumnIfMissing(db, 'bsky_setlist_posts', 'show_ended_at', 'TEXT');   // the "now available" recap post
   addColumnIfMissing(db, 'bsky_setlist_posts', 'livephish_url', 'TEXT');   // link from that post
+  addColumnIfMissing(db, 'shows', 'venueid_raw', 'INTEGER');   // Phish.net's own id; venueid is its alias root
 
   return db;
 }

@@ -13,8 +13,8 @@ const { webFixtureHandle } = require('./helpers/fixtures');
 const ROOT = path.join(__dirname, '..');
 
 // Start the server on an ephemeral port, run the body, always shut down.
-async function withServer(body) {
-  const db = webFixtureHandle();
+async function withServer(body, setup = null) {
+  const db = webFixtureHandle(setup);
   const server = createWebServer({ db, rootDir: ROOT });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -39,6 +39,25 @@ test('every page URL is served as HTML', async () => {
       assert.match(body, /^<!DOCTYPE html>/i, p);
     }
   });
+});
+
+test('an aliased venue id redirects to the venue Phish.net rolls it into', async () => {
+  const aliases = (db) => require('../lib/venues').syncVenues(db, [
+    { venueid: 1, venuename: 'Test Venue', alias: 0 }, { venueid: 1692, venuename: 'Jim Whelan Boardwalk Hall', alias: 1 },
+  ]);
+  await withServer(async (base) => {
+    const res = await get(base, '/venue/1692');
+    assert.equal(res.status, 302, 'not 301: Phish.net can drop an alias');
+    assert.equal(res.headers.get('location'), '/venue/1');
+    assert.equal((await get(base, '/venue/1')).status, 200, 'the root itself is served');
+    assert.equal((await get(base, '/venue/4242')).status, 200, 'an id Phish.net does not list is served as before');
+  }, aliases);
+});
+
+test('a database published before venues existed still serves venue pages', async () => {
+  await withServer(async (base) => {
+    assert.equal((await get(base, '/venue/1692')).status, 200);
+  }, (db) => db.exec('DROP TABLE venues'));
 });
 
 test('pages revalidate on every visit, so a deploy still shows up at once but unchanged HTML is not re-sent', async () => {

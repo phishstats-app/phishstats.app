@@ -12,6 +12,7 @@ const ADDED_AFTER_TRANSITION = [
   'eras/index',
   'landing/encore-openers',
   'live/set-lengths',
+  'venue/root',
   'period/bustouts',
   'period/core',
   'period/debuts',

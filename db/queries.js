@@ -29,12 +29,13 @@ function upsertSongs(db, songs) {
 
 function upsertSetlistRows(db, rows) {
   const showStmt = db.prepare(`
-    INSERT INTO shows (showid, showdate, showyear, venueid, venue, city, state, country, tourid, tourname, permalink, setlistnotes, artistid, artist_name, meta, exclude)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO shows (showid, showdate, showyear, venueid, venueid_raw, venue, city, state, country, tourid, tourname, permalink, setlistnotes, artistid, artist_name, meta, exclude)
+    VALUES (?, ?, ?, COALESCE((SELECT root FROM venues WHERE venueid = ?), ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(showid) DO UPDATE SET
       showdate = excluded.showdate,
       showyear = excluded.showyear,
       venueid = excluded.venueid,
+      venueid_raw = excluded.venueid_raw,
       venue = excluded.venue,
       city = excluded.city,
       state = excluded.state,
@@ -70,7 +71,9 @@ function upsertSetlistRows(db, rows) {
   try {
     for (const row of rows) {
       showStmt.run(
-        row.showid, row.showdate, row.showyear, row.venueid, row.venue,
+        // venueid is Phish.net's alias root when the venues are known
+        // (lib/venues.js); venueid_raw is always the id the setlist gave.
+        row.showid, row.showdate, row.showyear, row.venueid, row.venueid, row.venueid, row.venue,
         row.city, row.state, row.country, row.tourid, row.tourname,
         row.permalink, row.setlistnotes, row.artistid, row.artist_name,
         row.meta ?? '', row.exclude ?? 0

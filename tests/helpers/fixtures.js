@@ -142,10 +142,13 @@ function buildWebFixtureDb() {
 // lib/web/db.js opens a file read-only; the fixture lives in memory. This
 // wraps the fixture in the same run()/close() interface so the endpoint and
 // route tests exercise the real dispatch code against it.
-function webFixtureHandle() {
+// setup(db), if given, runs on the fixture first (add venue aliases, or drop a
+// table to stand in for an older published database).
+function webFixtureHandle(setup = null) {
   const { STATEMENTS } = require('../../lib/web/statements');
   const { ROW_CAP } = require('../../lib/web/db');
   const db = buildWebFixtureDb();
+  if (setup) setup(db);
   const prepared = new Map();
 
   function run(name, { variant = null, params = null, ids = null } = {}) {
