@@ -22,7 +22,7 @@
   </header>
   <form class="search" role="search" autocomplete="off" id="searchForm">
     <div class="search-row">
-      <input id="q" type="search" placeholder="Hear a song? Type it." aria-label="Song name" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="search">
+      <input id="q" type="search" placeholder="Song, venue, city, or date" aria-label="Search" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="search">
       <button type="button" class="clear" id="clearBtn" aria-label="Clear" hidden>&times;</button>
       <div class="suggest" id="suggest" role="listbox" hidden></div>
     </div>
@@ -63,7 +63,6 @@
   var songs = [], byId = {};
   var listReady = P.loadCatalog().then(function (c) {
     songs = c.songs; byId = c.songById; venues = c.venues; venueById = c.venueById;
-    $('hintRight').textContent = n(songs.filter(function (s) { return s.plays > 0; }).length) + ' songs';
     return c;
   }).catch(function (e) { showError(e); });
 
@@ -524,23 +523,12 @@
   })(5000);
 
   // ---- states --------------------------------------------------------------
-  var STARTERS = ['Tweezer', 'Harry Hood', 'You Enjoy Myself', 'Fluffhead', 'Destiny Unbound', 'Ghost'];
   function showEmpty() {
-    out.innerHTML =
-      '<div class="state"><h1>What just<br>happened<span class="mark">?</span></h1>' +
-      '<p>Type the song you’re hearing. You’ll get the gap, how often it shows up, where it usually lands in a show, and whether tonight is a big deal.</p>' +
-      '<div class="chips">' + STARTERS.map(function (s) { return '<button type="button" data-name="' + esc(s) + '">' + esc(s) + '</button>'; }).join('') + '</div></div>' +
-      '<div id="landing"></div>';
-    // Show-day opener calls and "today in history" (assets/landing.js).
+    out.innerHTML = '<div id="landing"></div>';
+    // The status strip, show-day forecast, latest show, season and "today in
+    // history" (assets/landing.js).
     P.crumbs([]);
     if (P.renderLanding) P.renderLanding(out.querySelector('#landing'));
-    out.querySelector('.chips').addEventListener('click', function (e) {
-      var b = e.target.closest('button'); if (!b) return;
-      listReady.then(function () {
-        var s = songs.filter(function (x) { return x.name === b.dataset.name; })[0];
-        if (s) choose(s.id);
-      });
-    });
   }
   function showLoading(name) {
     out.innerHTML = '<div class="state"><h1>' + esc(name) + '</h1><p>Pulling the history…</p></div>';

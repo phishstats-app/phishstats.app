@@ -1,5 +1,6 @@
-// Landing panels for the song page's empty state: "Today in history" and,
-// on a show day before the first song is posted, "Call the openers".
+// Landing panels for the song page's empty state, which is the home page: the
+// status strip (tonight, the tour, or the off-season, with chips under it),
+// "Tonight's forecast" on a show day, "Lately", and "Today in history".
 // Loaded after app.js (and timezones.js when available).
 (function () {
   'use strict';
@@ -225,14 +226,19 @@
     try { return localStorage.getItem(CALLOUTS_KEY) === '1'; } catch (e) { return false; }
   }
 
-  function loadTonight(el) {
-    var deviceToday = localDate(null);
-    return api('landing/scheduled', { d: deviceToday }).then(function (rows) {
-      // Pick the scheduled show whose date is "today" on its own venue clock.
-      var show = rows.filter(function (s) {
+  // The scheduled show whose date is "today" on its own venue clock, or null.
+  // One request shared by the forecast and the status strip.
+  function findTonight() {
+    return api('landing/scheduled', { d: localDate(null) }).then(function (rows) {
+      return rows.filter(function (s) {
         var tz = TZ ? TZ.venueTimeZone({ city: s.city, state: s.state, country: s.country }) : null;
         return s.showdate === localDate(tz);
-      })[0];
+      })[0] || null;
+    });
+  }
+
+  function loadTonight(el, tonightP) {
+    return tonightP.then(function (show) {
       if (!show) { el.innerHTML = ''; state.show = null; return; }
       state.show = show; state.el = el; state.wx = '';
       loadWeather(show).then(function (html) { state.wx = html; renderTonight(); });
@@ -256,6 +262,11 @@
     state.live = entries || [];
     state.overDate = opts && opts.over && state.live.length ? state.live[state.live.length - 1].showdate : null;
     if (state.show) renderTonight();
+    now.live = state.live.length > 0 && !(opts && opts.over);
+    now.overDate = state.overDate;
+    // The live panel calls this before drawing itself: nothing in the strip
+    // may throw into it.
+    try { renderNow(); } catch (e) { if (now.el) now.el.innerHTML = ''; }
   }
 
   // The most recent show on file, with the same notes the history list uses.
@@ -377,18 +388,170 @@
     }).catch(function () { el.innerHTML = ''; });
   }
 
+  // ---- Status strip: what is happening now ---------------------------------
+  // The top of the home page changes with the calendar: tonight's show, the
+  // tour between shows, or the off-season, each with a jump to the section
+  // that answers it. Under it, labelled chip rows: on a show day the latest
+  // show's notables and the regulars that are due; between shows the tour's
+  // notables, the due list and links; in the off-season the day's picks.
+  // While a show is live the strip and chips step aside for the live panel.
+  var now = { el: null, data: null, live: false, overDate: null };
+  function validTour(name) { return !!name && name !== 'Not Part of a Tour'; }
+  function daysBetween(a, b) { return Math.round((new Date(b + 'T12:00:00') - new Date(a + 'T12:00:00')) / 86400000); }
+  function where(city, st) { return city + (st ? ', ' + st : ''); }
+  // "Oct 6", with the year only when it is not this year.
+  function day(d) {
+    var o = { month: 'short', day: 'numeric' };
+    if (d.slice(0, 4) !== localDate(null).slice(0, 4)) o.year = 'numeric';
+    return new Date(d + 'T12:00:00').toLocaleDateString('en-US', o);
+  }
+  function chip(href, text, note) { return '<a href="' + esc(href) + '">' + esc(text) + (note ? '<small>' + esc(note) + '</small>' : '') + '</a>'; }
+  function songChip(name, note) { return chip(P.songPage(name), name, note); }
+  function chipRow(label, chips) { return chips.length ? '<div class="row"><span class="lab">' + esc(label) + '</span>' + chips.join('') + '</div>' : ''; }
+
+  // Bustouts (biggest gap first), debuts, then the show's best-ranked length.
+  // The "song|gap;..." and "song;..." lists are bustouts and debuts in
+  // landing/latest, but bustout_names and debut_names in season/shows, whose
+  // bustouts and debuts are counts.
+  function notableChips(shows, ranks, max) {
+    var seen = {}, out = [];
+    function add(song, note) { var k = P.songKey(song); if (seen[k]) return; seen[k] = true; out.push(songChip(song, note)); }
+    var bust = [], deb = [];
+    shows.forEach(function (s) {
+      String(('bustout_names' in s ? s.bustout_names : s.bustouts) || '').split(';').filter(Boolean).forEach(function (b) { var p = b.split('|'); bust.push({ song: p[0], gap: Number(p[1]) }); });
+      String(('debut_names' in s ? s.debut_names : s.debuts) || '').split(';').filter(Boolean).forEach(function (d) { deb.push(d); });
+    });
+    bust.sort(function (a, b) { return b.gap - a.gap; }).forEach(function (b) { add(b.song, n(b.gap) + '-show gap'); });
+    deb.forEach(function (d) { add(d, 'debut'); });
+    var r = (ranks || []).filter(function (x) { return x.cnt >= 3 && x.rnk <= 5; }).sort(function (a, b) { return a.rnk - b.rnk || b.ms - a.ms; })[0];
+    if (r) add(r.song, r.rnk === 1 ? 'longest ever' : '#' + r.rnk + ' longest');
+    else {
+      var long = shows.filter(function (s) { return s.longest_ms >= 15 * 60000; }).sort(function (a, b) { return b.longest_ms - a.longest_ms; })[0];
+      if (long) add(long.longest_song, mmss(long.longest_ms));
+    }
+    return out.slice(0, max);
+  }
+  function dueChips(due, max) { return (due || []).slice(0, max).map(function (s) { return songChip(s.song, 'gap ' + n(s.gap)); }); }
+  // The same songs all day for every visitor, a different handful tomorrow:
+  // a hash of the date seeds the draw from songs played 100+ times.
+  function todaysPicks(catalog, count) {
+    var pool = (catalog ? catalog.songs : []).filter(function (s) { return s.plays >= 100; });
+    var seed = localDate(null), h = 2166136261;
+    for (var i = 0; i < seed.length; i++) { h ^= seed.charCodeAt(i); h = Math.imul(h, 16777619); }
+    var out = [];
+    while (pool.length && out.length < count) {
+      h ^= h << 13; h ^= h >>> 17; h ^= h << 5;
+      out.push(pool.splice((h >>> 0) % pool.length, 1)[0]);
+    }
+    return out.map(function (s) { return songChip(s.name); });
+  }
+
+  // tonight: on a show day; tour: mid-tour, a tour just ended, or one about to
+  // start; off: everything else.
+  function modeOf(st, today) {
+    if (!st) return 'off';
+    var since = daysBetween(st.last_date, today), to = st.next_date ? daysBetween(today, st.next_date) : Infinity;
+    return (validTour(st.tourname) && st.tour_left > 0) || since <= 7 || to <= 14 ? 'tour' : 'off';
+  }
+
+  function renderNow() {
+    var el = now.el, d = now.data;
+    if (!el || !d) return;
+    if (now.live) { el.innerHTML = ''; return; }
+    var st = d.status, strip, rows = [];
+    if (d.mode === 'tonight') {
+      var t = d.tonight, isFinal = now.overDate === t.showdate;
+      var night = d.runBefore + 1, nights = night + d.runLeft;
+      var tourOk = st && validTour(t.tourname) && st.tourname === t.tourname;
+      var bits = [where(t.city, t.state)];
+      if (nights > 1) bits.push('night ' + night + ' of ' + nights);
+      if (tourOk) bits.push('show ' + (st.last_date < t.showdate ? st.tour_played + 1 : st.tour_played) + ' of ' + (st.tour_played + st.tour_left) + ', ' + t.tourname);
+      strip = ['tonight', isFinal ? 'Tonight · final' : 'Tonight', t.venue, bits.join(' · '), isFinal ? ['#live', 'Setlist ↑'] : ['#landingTonight', 'Forecast ↓']];
+      var L = d.latest;
+      if (L) {
+        var ago = daysBetween(L.show.showdate, t.showdate);
+        rows.push(chipRow(ago === 0 ? 'Tonight' : ago === 1 ? 'Last night' : 'Last show', notableChips([L.show], L.ranks, 3)));
+      }
+      rows.push(chipRow('Due', dueChips(d.due, 3)));
+    } else if (d.mode === 'tour') {
+      var tv = validTour(st.tourname);
+      var k = !tv ? 'Between shows' : st.tour_left > 0 ? st.tourname + ' · ' + n(st.tour_played) + ' of ' + n(st.tour_played + st.tour_left) + ' shows' : st.tourname + ' · done, ' + n(st.tour_played) + ' shows';
+      strip = ['tour', k,
+        st.next_date ? 'Next: ' + day(st.next_date) + ', ' + st.next_venue : 'Last show: ' + day(st.last_date) + ', ' + st.last_venue,
+        st.next_date ? where(st.next_city, st.next_state) + ' · last show ' + day(st.last_date) + ' at ' + st.last_venue : where(st.last_city, st.last_state),
+        ['#landingLatest', 'Latest show ↓']];
+      if (tv) rows.push(chipRow('This tour', notableChips(d.tourShows, d.tourRanks, 3)));
+      rows.push(chipRow('Due', dueChips(d.due, 3)));
+      var browse = [];
+      if (tv) browse.push(chip('/tour/' + st.tourid, st.tourname));
+      browse.push(chip(P.venuePage(st.last_venueid), st.last_venue));
+      if (st.next_venueid && st.next_venueid !== st.last_venueid) browse.push(chip(P.venuePage(st.next_venueid), st.next_venue));
+      rows.push(chipRow('Browse', browse));
+    } else {
+      strip = ['off', 'Off-season',
+        st && st.next_date ? 'Next: ' + day(st.next_date) + ', ' + st.next_venue : st ? 'Last show: ' + day(st.last_date) + ', ' + st.last_venue : 'Phish stats',
+        st && st.next_date ? where(st.next_city, st.next_state) + ' · last show ' + day(st.last_date) + ' at ' + st.last_venue : st ? where(st.last_city, st.last_state) : '',
+        ['#landingSeason', 'The season ↓']];
+      rows.push(chipRow('Today’s picks', todaysPicks(d.catalog, 4)));
+      var links = [];
+      if (st) links.push(chip('/year/' + st.last_date.slice(0, 4), st.last_date.slice(0, 4)));
+      if (st && validTour(st.tourname)) links.push(chip('/tour/' + st.tourid, st.tourname));
+      links.push(chip('/show/random', 'Random show'));
+      rows.push(chipRow('Browse', links));
+    }
+    var body = rows.join('');
+    el.innerHTML = '<div class="now-strip ' + strip[0] + '"><span class="pip"></span><div class="txt"><div class="k">' + esc(strip[1]) + '</div>' +
+      '<div class="v">' + esc(strip[2]) + '</div>' + (strip[3] ? '<div class="s">' + esc(strip[3]) + '</div>' : '') + '</div>' +
+      '<a class="go" href="' + strip[4][0] + '">' + esc(strip[4][1]) + '</a></div>' +
+      (body ? '<div class="now-picks">' + body + '</div>' : '');
+  }
+
+  function loadNow(el, tonightP, latestP) {
+    now.el = el;
+    var today = localDate(null), soft = function (p) { return p ? p.catch(function () { return null; }) : null; };
+    return Promise.all([api('landing/status', { d: today }), soft(api('landing/due', { d: today })), soft(tonightP), soft(latestP)]).then(function (r) {
+      var st = r[0][0] || null, tonight = r[2];
+      var mode = tonight ? 'tonight' : modeOf(st, today);
+      var tourY = st && st.last_date.slice(0, 4) + '-01-01';
+      return Promise.all([
+        tonight ? soft(api('landing/run-shows', { v: tonight.venueid, d: tonight.showdate })) : null,
+        tonight ? soft(api('landing/run-left', { v: tonight.venueid, d: tonight.showdate })) : null,
+        mode === 'tour' && validTour(st.tourname) ? soft(api('season/shows', { y: tourY })) : null,
+        mode === 'tour' && validTour(st.tourname) ? soft(api('season/tops', { y: tourY })) : null,
+        mode === 'off' ? soft(P.loadCatalog()) : null
+      ]).then(function (x) {
+        var tourShows = (x[2] || []).filter(function (s) { return s.tourname === st.tourname; });
+        var inTour = {}; tourShows.forEach(function (s) { inTour[s.showdate] = true; });
+        now.data = {
+          mode: mode, status: st, due: r[1], tonight: tonight,
+          latest: r[3] && r[3][0][0] ? { show: r[3][0][0], ranks: r[3][1] } : null,
+          runBefore: x[0] ? x[0].length : 0, runLeft: x[1] && x[1][0] ? Number(x[1][0].n) : 0,
+          tourShows: tourShows,
+          // season/tops: versions in their song's all-time top five, as rnk and cnt.
+          tourRanks: (x[3] || []).filter(function (t) { return inTour[t.show_date]; }),
+          catalog: x[4]
+        };
+        renderNow();
+        var hint = document.getElementById('hintRight');
+        if (hint && st) hint.textContent = 'Data through ' + day(st.last_date);
+      });
+    }).catch(function () { el.innerHTML = ''; });
+  }
+
   function renderLanding(container) {
     // "Lately" holds the latest show and the season, each still its own section.
-    container.innerHTML = '<div id="landingTonight"></div>' +
+    container.innerHTML = '<div id="landingNow"></div><div id="landingTonight"></div>' +
       '<div class="umbrella"><h2 class="umbrella-h">Lately</h2><div id="landingLatest"></div><div id="landingSeason"></div></div>' +
       '<div id="landingHistory"></div>';
     renderSeason(container.querySelector('#landingSeason'));
-    Promise.all([api('landing/latest'), api('landing/latest-ranks')])
-      .then(function (r) { renderLatest(container.querySelector('#landingLatest'), r[0][0], r[1]); })
+    var latestP = Promise.all([api('landing/latest'), api('landing/latest-ranks')]);
+    latestP.then(function (r) { renderLatest(container.querySelector('#landingLatest'), r[0][0], r[1]); })
       .catch(function () {});
     // ?history=MM-DD previews another date's panel.
     var md = (/^\d{2}-\d{2}$/.test(new URLSearchParams(location.search).get('history') || '') ? new URLSearchParams(location.search).get('history') : localDate(null).slice(5));
-    loadTonight(container.querySelector('#landingTonight'));
+    var tonightP = findTonight();
+    loadTonight(container.querySelector('#landingTonight'), tonightP);
+    loadNow(container.querySelector('#landingNow'), tonightP, latestP);
     Promise.all([api('landing/history', { md: md }), api('landing/history-ranks', { md: md })])
       .then(function (r) { renderHistory(container.querySelector('#landingHistory'), md, r[0], r[1]); })
       .catch(function () {});

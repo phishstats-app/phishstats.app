@@ -134,12 +134,8 @@
   /* Empty / loading / error ------------------------------------------- */
   .state { padding: 56px 0 24px; text-align: center; color: var(--ink-dim); }
   .state h1 { font: 600 clamp(2rem, 8vw, 2.8rem)/1.05 var(--display); color: var(--ink); letter-spacing: -.01em; }
-  .state h1 .mark { color: var(--red); }
   .state p { margin-top: 12px; max-width: 34ch; margin-left: auto; margin-right: auto; }
   .state .err { color: var(--red); font-family: var(--mono); font-size: .85rem; margin-top: 16px; word-break: break-word; }
-  .chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 22px; }
-  .chips button { padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px; font-size: .88rem; color: var(--ink); }
-  .chips button:hover { border-color: var(--blue); }
 
   /* Song card ---------------------------------------------------------- */
   .song { animation: rise .35s ease-out both; }
@@ -428,6 +424,31 @@
 
   /* Landing panels: tonight's opener calls and today in history ------------ */
   .landing { text-align: left; }
+  /* The status strip: what is happening now (tonight, the tour, the off-season),
+     with a jump to the section that answers it. Hidden while a show is live,
+     when the live panel above says the same thing. */
+  .now-strip { display: flex; align-items: center; gap: 14px; margin-top: 14px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+  .now-strip .pip { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--ink-faint); }
+  .now-strip.tonight .pip { background: var(--gold); }
+  .now-strip.tour .pip { background: var(--ink-dim); }
+  .now-strip .txt { min-width: 0; flex: 1; }
+  .now-strip .k { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-dim); }
+  .now-strip.tonight .k { color: var(--gold); }
+  .now-strip .v { font: 600 clamp(1.2rem, 5vw, 1.55rem)/1.15 var(--display); color: var(--ink); letter-spacing: -.01em; margin-top: 2px; }
+  .now-strip .s { font-size: .84rem; color: var(--ink-dim); margin-top: 3px; }
+  .now-strip .go { flex: none; font-size: .8rem; color: var(--ink); padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; white-space: nowrap; }
+  .now-strip .go:hover { border-color: var(--ink-dim); }
+  @media (max-width: 520px) { .now-strip { flex-wrap: wrap; } .now-strip .go { margin-left: 24px; } }
+  /* The strip's jump targets clear the sticky search bar. */
+  #live, #landingTonight, #landingLatest, #landingSeason { scroll-margin-top: 110px; }
+  /* Labelled chip rows under the strip: last night's notables, the songs due. */
+  .now-picks { margin-top: 14px; display: grid; gap: 8px; }
+  .now-picks .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .now-picks .lab { flex: none; width: 6rem; font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); }
+  .now-picks a { padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: .84rem; color: var(--ink); }
+  .now-picks a:hover { border-color: var(--blue); }
+  .now-picks a small { color: var(--ink-faint); margin-left: 5px; font-family: var(--mono); font-size: .72rem; }
+  @media (max-width: 520px) { .now-picks .lab { width: 100%; } }
   /* Tonight's forecast: the date beside the title, and its two parts. */
   .tonight .head h2 small { font-size: .7em; font-weight: 400; color: var(--ink-dim); }
   .tonight .subhead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 16px 0 8px; padding-top: 10px; border-top: 1px solid var(--line); }
