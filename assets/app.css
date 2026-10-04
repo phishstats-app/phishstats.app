@@ -427,6 +427,8 @@
   .wx-h .d { font-weight: 600; }
   .wx-h .p, .wx-h .w { font-family: var(--mono); font-size: .72rem; color: var(--ink-dim); }
   .wx-h.wet .p { color: var(--blue); }
+  /* The legend under the strip: a caption, like the call-outs' (.seg .none). */
+  .wx .none { font-size: .78rem; color: var(--ink-faint); margin-top: 6px; }
 
   .foot-note { margin-top: 28px; font-size: .78rem; color: var(--ink-faint); text-align: center; line-height: 1.6; }
   .foot-note a { color: var(--ink-dim); border-bottom: 1px solid var(--line); }
