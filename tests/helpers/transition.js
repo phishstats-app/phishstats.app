@@ -10,6 +10,7 @@ const ADDED_AFTER_TRANSITION = [
   'catalog/tours',
   'era/years',
   'eras/index',
+  'landing/encore-openers',
   'live/set-lengths',
   'period/bustouts',
   'period/core',

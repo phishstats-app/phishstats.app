@@ -139,14 +139,21 @@
     }
     return picked;
   }
-  function candidates(rows, excluded, shows2y) {
+  // The whole pool in one weighted random order, drawn once per load. The
+  // list shown is the first eight of it not yet played tonight, so during the
+  // show a song that gets played drops out and the next one moves up without
+  // the rest reshuffling under the reader.
+  function rankPool(rows, excluded) {
     var pool = rows.map(function (r) {
       var score = Number(r.opens_2y) * 3 + Number(r.opens_5y);
       return Object.assign({ score: score, out: excluded[r.songid] || (Number(r.gap) === 0 ? 'played last show' : null) }, r);
     }).filter(function (r) { return !r.out && r.score > 0; });
-    return weightedSample(pool, 8, function (r) { return r.score * r.score; })
+    return weightedSample(pool, pool.length, function (r) { return r.score * r.score; });
+  }
+  function picks(ranked, played, shows2y) {
+    return ranked.filter(function (r) { return !played[P.songKey(r.song)]; }).slice(0, 8)
       .sort(function (a, b) { return b.score - a.score; })
-      .map(function (r) { r.rate = shows2y ? Math.round(100 * r.opens_2y / shows2y) : 0; return r; });
+      .map(function (r) { return Object.assign({ rate: shows2y ? Math.round(100 * r.opens_2y / shows2y) : 0 }, r); });
   }
   function songLink(name) { return '<a href="' + P.songPage(name) + '">' + esc(name) + '</a>'; }
 
@@ -160,21 +167,23 @@
       '<div class="venue-line">Phish’s <b>' + P.ordinal(d.priorHere + 1) + '</b> show at ' + esc(show.venue) + (runNight > 1 ? ', <b>night ' + runNight + '</b> of this run' : '') + '.' +
       (d.runSongs.length ? ' <span class="vs">' + n(d.runSongs.length) + ' songs already played this run are left out below.</span>' : '') + '</div>';
 
-    // Before the first post: the likely openers. Once the phish.com account
-    // has posted, the live panel above carries the setlist, so just show what
-    // actually opened each set.
-    function slotBlock(slot, title, actual) {
-      if (started) {
-        return '<div class="seg"><h3>' + esc(title) + '</h3>' +
-          (actual ? '<div class="call-result"><b>' + songLink(actual.song) + '</b></div>' : '<div class="none">Not yet posted.</div>') + '</div>';
-      }
-      return '<div class="seg"><h3>' + esc(title) + '</h3><ol>' +
-        d.cands[slot].map(function (c) {
+    // Each slot shows what actually opened it once the phish.com account has
+    // posted it, and its likely openers until then, less everything played
+    // so far tonight (the live feed re-renders this on every post).
+    var played = {};
+    tonight.forEach(function (e) { played[P.songKey(e.song)] = true; });
+    function slotBlock(slot, title, actual, verb) {
+      if (actual) return '<div class="seg"><h3>' + esc(title) + '</h3><div class="call-result"><b>' + songLink(actual.song) + '</b></div></div>';
+      var list = picks(d.cands[slot], played, d.shows2y);
+      return '<div class="seg"><h3>' + esc(title) + '</h3>' + (list.length ? '<ol>' +
+        list.map(function (c) {
           return '<li><span class="t">' + songLink(c.song) + '</span><span class="n">' + c.rate + '% · gap ' + n(c.gap) + '</span></li>';
-        }).join('') + '</ol><div class="none">rate = how often it opened over the last two years (' + n(d.shows2y) + ' shows)</div></div>';
+        }).join('') + '</ol>' : '') +
+        '<div class="none">rate = how often it ' + verb + ' over the last two years (' + n(d.shows2y) + ' shows)' + (started ? '; songs played tonight are left out' : '') + '</div></div>';
     }
     var set1Actual = tonight[0] || null;
     var set2Actual = tonight.filter(function (e) { return e.set_label === '2'; })[0] || null;
+    var encoreActual = tonight.filter(function (e) { return /^e/.test(e.set_label); })[0] || null;
 
     function longshotBlock() {
       if (started) return '';
@@ -186,8 +195,9 @@
     }
 
     el.innerHTML = '<section class="sec landing tonight">' + head + state.wx +
-      '<div class="segues">' + slotBlock('set1', 'Set 1 opener', set1Actual) + slotBlock('set2', 'Set 2 opener', set2Actual) + longshotBlock() + '</div>' +
-      (!started ? '<div class="none" style="margin-top:8px">The lists reshuffle on each load, weighted toward the likely picks. Tap a song for its page.</div>' : '') +
+      '<div class="segues">' + slotBlock('set1', 'Set 1 opener', set1Actual, 'opened set 1') + slotBlock('set2', 'Set 2 opener', set2Actual, 'opened set 2') +
+        slotBlock('encore', 'Encore opener', encoreActual, 'opened the encore') + longshotBlock() + '</div>' +
+      (!encoreActual ? '<div class="none" style="margin-top:8px">The lists reshuffle on each load, weighted toward the likely picks. Tap a song for its page.</div>' : '') +
       '</section>';
   }
 
@@ -203,11 +213,11 @@
       state.show = show; state.el = el; state.wx = '';
       loadWeather(show).then(function (html) { state.wx = html; renderTonight(); });
       var A = { d: show.showdate, v: show.venueid };
-      return Promise.all([api('landing/venue-info', A), api('landing/run-shows', A), api('landing/run-songs', A), api('landing/shows-2y', { d: A.d }), api('landing/openers', { slot: 'set1', d: A.d }), api('landing/openers', { slot: 'set2', d: A.d }), api('landing/longshots')])
+      return Promise.all([api('landing/venue-info', A), api('landing/run-shows', A), api('landing/run-songs', A), api('landing/shows-2y', { d: A.d }), api('landing/openers', { slot: 'set1', d: A.d }), api('landing/openers', { slot: 'set2', d: A.d }), api('landing/longshots'), api('landing/encore-openers', { d: A.d })])
         .then(function (r) {
           var excluded = {}; r[2].forEach(function (s) { excluded[s.songid] = 'played ' + fmtDate(s.played); });
           state.data = { priorHere: r[0][0].prior_here, runShows: r[1], runSongs: r[2], shows2y: r[3][0].n, longshots: r[6],
-            cands: { set1: candidates(r[4], excluded, r[3][0].n), set2: candidates(r[5], excluded, r[3][0].n) } };
+            cands: { set1: rankPool(r[4], excluded), set2: rankPool(r[5], excluded), encore: rankPool(r[7], excluded) } };
           renderTonight();
         });
     }).catch(function () { el.innerHTML = ''; });
