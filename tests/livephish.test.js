@@ -75,6 +75,56 @@ test('syncLivePhish resolves the link for shows that have one, stores tracks, an
   db.close();
 });
 
+// 2026-10-03: phish.com's recap for 10/2 linked livephi.sh/ph261004, the
+// 10/4 release (then deleted the post). The short links are date-coded
+// (ph + YYMMDD) and a released page names its show's date, so a link for
+// the wrong night is caught and the show's own link used instead.
+function syncWithLink(showdate, link, pages) {
+  const db = initDb(':memory:');
+  db.prepare("INSERT INTO bsky_setlist_posts (uri, showdate, set_label, position, song, posted_at, livephish_url) VALUES ('at://x/1', ?, 'e', 1, 'Carini', '2026-10-03T03:00:00.000Z', ?)").run(showdate, link);
+  const requested = [];
+  const fetchImpl = async (url) => {
+    requested.push(url);
+    const p = pages[url];
+    if (!p) throw new Error('unexpected ' + url);
+    return { ok: true, url: p.final, text: async () => p.html };
+  };
+  return { db, requested, run: () => syncLivePhish(db, fetchImpl, { now: new Date('2026-10-04T05:30:00Z') }) };
+}
+const dated = (iso) => PAGE.replace('<body>', `<body><time datetime="${iso}">`);
+
+test('a date-coded link for another night is replaced with the show\'s own before fetching', async () => {
+  const s = syncWithLink('2026-10-02', 'https://livephi.sh/ph261004', {
+    'https://livephi.sh/ph261002': { final: 'https://www.livephish.com/LP-2792.html', html: dated('2026-10-02') },
+  });
+  const r = await s.run();
+  assert.deepEqual(s.requested, ['https://livephi.sh/ph261002']);
+  assert.deepEqual(r.shows, ['2026-10-02']);
+  assert.equal(s.db.prepare('SELECT DISTINCT source_url FROM livephish_tracks').get().source_url, 'https://www.livephish.com/LP-2792.html');
+});
+
+test('a page that names another show\'s date is not stored; the show\'s own link is tried', async () => {
+  const s = syncWithLink('2026-10-02', 'https://www.livephish.com/LP-2799.html', {
+    'https://www.livephish.com/LP-2799.html': { final: 'https://www.livephish.com/LP-2799.html', html: dated('2026-10-09') },
+    'https://livephi.sh/ph261002': { final: 'https://www.livephish.com/LP-2792.html', html: dated('2026-10-02') },
+  });
+  const r = await s.run();
+  assert.deepEqual(s.requested, ['https://www.livephish.com/LP-2799.html', 'https://livephi.sh/ph261002']);
+  assert.deepEqual(r.shows, ['2026-10-02']);
+});
+
+test('when neither the link nor the show\'s own release has its tracks yet, nothing is stored', async () => {
+  const empty = { final: 'https://www.livephish.com/LP-2794.html', html: '<html><title>Phish online-music of 10/04/2026</title></html>' };
+  const s = syncWithLink('2026-10-02', 'https://www.livephish.com/LP-2794.html', {
+    'https://www.livephish.com/LP-2794.html': empty,
+    'https://livephi.sh/ph261002': { final: 'https://www.livephish.com/LP-2792.html', html: '<html></html>' },
+  });
+  const r = await s.run();
+  assert.deepEqual(r.shows, []);
+  assert.equal(r.failures.length, 1);
+  assert.equal(s.db.prepare('SELECT COUNT(*) AS n FROM livephish_tracks').get().n, 0);
+});
+
 test('parseLivePhishPage decodes each entity in a title exactly once', () => {
   const page = ['<h6>Set One</h6>',
     track('Harry Hood &amp; Friends', 600),
