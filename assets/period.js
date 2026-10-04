@@ -201,7 +201,7 @@
     var lines = [];
 
     if (st.longest) {
-      lines.push(['Longest version', esc(st.longest.song) + ' ' + mmss(st.longest.ms) +
+      lines.push(['Longest song', esc(st.longest.song) + ' ' + mmss(st.longest.ms) +
         ' <a href="' + P.showPage(st.longest.date) + '">' + fmtDate(st.longest.date) + '</a>']);
     }
     if (st.firstsCount) {
@@ -287,7 +287,7 @@
     ];
     var lines = [];
     if (st.longest) {
-      lines.push('<b>Longest</b> ' + esc(st.longest.song) + ' ' + mmss(st.longest.ms) +
+      lines.push('<b>Longest song</b> ' + esc(st.longest.song) + ' ' + mmss(st.longest.ms) +
         ' <a href="' + P.showPage(st.longest.date) + '">' + fmtDate(st.longest.date) + '</a>');
     }
     if (st.firstsCount) {

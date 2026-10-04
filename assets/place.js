@@ -77,7 +77,7 @@
       '<div class="lead">' +
         '<div class="cell"><div class="num">' + n(core.shows) + '</div><div class="lab">Shows</div><div class="sub">' + P.pct(core.shows, core.all_shows) + ' of all Phish shows</div></div>' +
         '<div class="cell"><div class="num' + (totalBustouts ? ' hot' : '') + '">' + n(totalBustouts) + '</div><div class="lab">Bustouts</div><div class="sub">50+ show gaps</div></div>' +
-        '<div class="cell"><div class="num">' + (longest[0] ? mmss(longest[0].ms) : '–') + '</div><div class="lab">Longest</div><div class="sub">' + (longest[0] ? esc(longest[0].song) : 'no lengths') + '</div></div>' +
+        '<div class="cell"><div class="num">' + (longest[0] ? mmss(longest[0].ms) : '–') + '</div><div class="lab">Longest song</div><div class="sub">' + (longest[0] ? esc(longest[0].song) : 'no lengths') + '</div></div>' +
       '</div>' +
 
       (!isVenue && venues.length > 1 ? '<section class="sec"><div class="head"><h2>Venues</h2></div><ol class="perf">' + venues.map(function (v) {

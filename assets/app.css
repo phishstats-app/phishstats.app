@@ -264,6 +264,10 @@
     .seg .n { text-align: left; }
   }
   .seg .mark { font-family: var(--mono); color: var(--red); }
+  /* A caption or empty-state note. Small and faint wherever it sits; it had a
+     style only inside a .seg, so the weather legend, the call-outs' note and
+     the season's footnote rendered as body text. */
+  .none { font-size: .78rem; color: var(--ink-faint); }
   .seg .none { font-size: .85rem; color: var(--ink-faint); padding: 4px 0; }
 
   /* Live panel: tonight's posts from the phish.com Bluesky account -------- */
@@ -427,8 +431,8 @@
   .wx-h .d { font-weight: 600; }
   .wx-h .p, .wx-h .w { font-family: var(--mono); font-size: .72rem; color: var(--ink-dim); }
   .wx-h.wet .p { color: var(--blue); }
-  /* The legend under the strip: a caption, like the call-outs' (.seg .none). */
-  .wx .none { font-size: .78rem; color: var(--ink-faint); margin-top: 6px; }
+  .wx .none { margin-top: 6px; }
+  .season > .none { margin-top: 10px; }
 
   .foot-note { margin-top: 28px; font-size: .78rem; color: var(--ink-faint); text-align: center; line-height: 1.6; }
   .foot-note a { color: var(--ink-dim); border-bottom: 1px solid var(--line); }

@@ -294,7 +294,7 @@
       ['Music per show', st.music ? Math.round(st.music / 60000) + ' min' : '–', '']
     ];
     var lines = [];
-    if (st.longest) lines.push('<b>Longest</b> ' + esc(st.longest.longest_song) + ' ' + mmss(st.longest.longest_ms) + ' <a href="' + P.showPage(st.longest.showdate) + '">' + fmtDate(st.longest.showdate) + '</a>');
+    if (st.longest) lines.push('<b>Longest song</b> ' + esc(st.longest.longest_song) + ' ' + mmss(st.longest.longest_ms) + ' <a href="' + P.showPage(st.longest.showdate) + '">' + fmtDate(st.longest.showdate) + '</a>');
     if (st.firsts.length) lines.push('<b class="gold">All-time longest</b> ' + st.firsts.slice(0, 6).map(function (t) { return esc(t.song) + ' <a href="' + P.showPage(t.show_date) + '">' + fmtDate(t.show_date) + '</a>'; }).join(', ') + (st.firsts.length > 6 ? ' and ' + n(st.firsts.length - 6) + ' more' : ''));
     if (st.tops.length) lines.push('<b>Top-five versions</b> ' + n(st.tops.length) + (st.tops.length > st.firsts.length && st.tops.length <= 8 ? ': ' + st.tops.filter(function (t) { return t.rnk > 1; }).map(function (t) { return esc(t.song) + ' #' + t.rnk; }).join(', ') : ''));
     if (st.bustouts.length) lines.push('<b class="red">Bustouts</b> ' + n(st.bustouts.length) + ': ' + st.bustouts.slice(0, 5).map(function (b) { return esc(b.song) + ' (' + n(b.gap) + ')'; }).join(', ') + (st.bustouts.length > 5 ? ', …' : ''));

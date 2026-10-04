@@ -301,7 +301,7 @@
       '<div class="lead">' +
         '<div class="cell"><div class="num">' + n(rows.length) + '</div><div class="lab">Songs</div><div class="sub">' + n(sets.length) + ' segments</div></div>' +
         '<div class="cell"><div class="num' + (items.some(function (i) { return i.cls === 'hot'; }) ? ' hot' : '') + '">' + n(items.length) + '</div><div class="lab">Notable</div><div class="sub">' + (items.length ? esc(items[0].tag.toLowerCase()) : 'nothing unusual') + '</div></div>' +
-        '<div class="cell"><div class="num">' + (longest ? mmss(longest.ms) : '–') + '</div><div class="lab">Longest</div><div class="sub">' + (longest ? esc(longest.song) : 'no lengths yet') + '</div></div>' +
+        '<div class="cell"><div class="num">' + (longest ? mmss(longest.ms) : '–') + '</div><div class="lab">Longest song</div><div class="sub">' + (longest ? esc(longest.song) : 'no lengths yet') + '</div></div>' +
       '</div>' +
 
       (items.length ? '<section class="sec"><div class="head"><h2>Notable</h2><span>' + n(items.length) + ' from the data, no editorializing</span></div><ol class="notable">' +
