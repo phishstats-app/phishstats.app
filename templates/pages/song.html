@@ -270,17 +270,40 @@
         live.official = byKey;
       }).catch(function () { live.official = {}; });
   }
+  // Posts by URI: the feed's, plus any the Jetstream socket delivered before
+  // the feed carried them. The socket hands over the whole post the moment it
+  // is made, so a new song shows at once; the feed behind the public API is a
+  // BunnyCDN copy that was up to a minute old (2026-10-03: What's Going
+  // Through Your Mind waited for a manual reload).
+  var feedPosts = {}, socketPosts = {};
+  function applyPosts() {
+    var merged = Object.assign({}, socketPosts, feedPosts);
+    var all = parseLiveFeed(Object.keys(merged).map(function (k) { return merged[k]; }));
+    var latest = all.length ? all[all.length - 1] : null;
+    var newest = latest ? Math.max(latest.posted_at.getTime(), latest.show_ended_at ? latest.show_ended_at.getTime() : 0) : 0;
+    live.entries = latest && (Date.now() - newest) < LIVE_WINDOW_MS ? all.filter(function (e) { return e.showdate === latest.showdate; }) : [];
+    return live.entries.length ? Promise.all([loadOfficial(live.entries[0].showdate), loadLiveFacts(live.entries)]) : null;
+  }
+  // The edge caches each URL; a parameter that changes every ten seconds
+  // bounds how stale a copy can be while viewers in the same ten seconds
+  // still share one. no-store keeps the browser's own cache (max-age=30) out.
+  function feedUrl() { return BSKY_FEED + '&t=' + Math.floor(Date.now() / 10000); }
+  function addSocketPost(uri, record) {
+    socketPosts[uri] = { text: record.text, createdAt: record.createdAt };
+    live.fetchedAt = new Date(); live.error = null;
+    Promise.resolve().then(applyPosts).catch(function () {}).then(afterLive);
+  }
   function loadLive() {
-    fetch(BSKY_FEED).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(function (j) {
-      var posts = (j.feed || []).filter(function (f) { return !f.reason && f.post && f.post.record; })
-        .map(function (f) { return { text: f.post.record.text, createdAt: f.post.record.createdAt }; });
-      var all = parseLiveFeed(posts);
-      var latest = all.length ? all[all.length - 1] : null;
-      var newest = latest ? Math.max(latest.posted_at.getTime(), latest.show_ended_at ? latest.show_ended_at.getTime() : 0) : 0;
-      live.entries = latest && (Date.now() - newest) < LIVE_WINDOW_MS ? all.filter(function (e) { return e.showdate === latest.showdate; }) : [];
+    fetch(feedUrl(), { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(function (j) {
+      feedPosts = {};
+      (j.feed || []).filter(function (f) { return !f.reason && f.post && f.post.record; })
+        .forEach(function (f) { feedPosts[f.post.uri] = { text: f.post.record.text, createdAt: f.post.record.createdAt }; });
+      Object.keys(socketPosts).forEach(function (k) { if (feedPosts[k]) delete socketPosts[k]; });
       live.fetchedAt = new Date(); live.error = null;
-      return live.entries.length ? Promise.all([loadOfficial(live.entries[0].showdate), loadLiveFacts(live.entries)]) : null;
-    }).catch(function (e) { live.error = e; live.fetchedAt = new Date(); }).then(function () {
+      return applyPosts();
+    }).catch(function (e) { live.error = e; live.fetchedAt = new Date(); }).then(afterLive);
+  }
+  function afterLive() {
       renderLive();
       if (P.landingLive) P.landingLive(live.entries);
       // The venue section depends on tonight's location, so re-render the
@@ -289,7 +312,6 @@
         var before = document.querySelector('#venueSec h2'), v = currentVenue(lastRender[0][0]);
         if (v && (!before || before.textContent !== 'At ' + v.venue)) render(lastRender[0][0], lastRender[1], lastRender[2], lastRender[3]);
       }
-    });
   }
   function clock(ms) {
     var s = Math.max(0, Math.floor(ms / 1000)), m = Math.floor(s / 60), h = Math.floor(m / 60);
@@ -438,7 +460,14 @@
     ws.onmessage = function (ev) {
       try {
         var m = JSON.parse(ev.data);
-        if (m.kind === 'commit' && m.commit && m.commit.collection === 'app.bsky.feed.post' && m.commit.operation !== 'delete') setTimeout(loadLive, 2500);
+        // A new top-level post goes straight into the setlist from the socket
+        // (replies are not setlist posts; the feed filters them too). The feed
+        // fetch a few seconds later reconciles: deletes, and anything missed.
+        var c = m.kind === 'commit' && m.commit && m.commit.collection === 'app.bsky.feed.post' ? m.commit : null;
+        var uri = c ? 'at://' + m.did + '/app.bsky.feed.post/' + c.rkey : null;
+        if (c && c.operation === 'create' && c.record && !c.record.reply && typeof c.record.text === 'string') addSocketPost(uri, c.record);
+        if (c && c.operation === 'delete') delete socketPosts[uri];
+        if (c) setTimeout(loadLive, 8000);
       } catch (e) {}
     };
     ws.onclose = function () { window.__jetstream = 'closed'; setTimeout(function () { jetstream(Math.min(delay * 2, 5 * 60 * 1000)); }, delay); };
