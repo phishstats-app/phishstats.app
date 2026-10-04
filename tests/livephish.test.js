@@ -125,6 +125,21 @@ test('when neither the link nor the show\'s own release has its tracks yet, noth
   assert.equal(s.db.prepare('SELECT COUNT(*) AS n FROM livephish_tracks').get().n, 0);
 });
 
+// The bad 10/2 recap was deleted, and the hourly Bluesky re-read (two days
+// back) then cleared 10/2's stored link, so no link was left to correct. A
+// settled show (in shows) with no link tries its own date-coded one.
+test('a settled show whose recap link is gone is fetched by its own date-coded link', async () => {
+  const s = syncWithLink('2026-10-02', null, {
+    'https://livephi.sh/ph261002': { final: 'https://www.livephish.com/LP-2792.html', html: dated('2026-10-02') },
+  });
+  const r0 = await s.run();
+  assert.deepEqual([s.requested, r0.shows], [[], []], 'not while the show is unsettled (not in shows)');
+  s.db.prepare("INSERT INTO shows (showid, showdate, showyear, venueid, artist_name, exclude) VALUES (1002, '2026-10-02', 2026, 777, 'Phish', 0)").run();
+  const r = await s.run();
+  assert.deepEqual(s.requested, ['https://livephi.sh/ph261002']);
+  assert.deepEqual(r.shows, ['2026-10-02']);
+});
+
 test('parseLivePhishPage decodes each entity in a title exactly once', () => {
   const page = ['<h6>Set One</h6>',
     track('Harry Hood &amp; Friends', 600),

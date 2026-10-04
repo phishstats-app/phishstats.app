@@ -2,7 +2,9 @@
 // Hourly "live" ingest: the cheap sources that change during and right after
 // a show. Bluesky posts (set times, post-to-post lengths, the show-ended
 // marker) and the LivePhish release page it links to (official lengths).
-// The full phish.net refresh stays nightly, and since 2026-09-17 so does
+// Once phish.com posts that a show is "now available", that one show is
+// fetched from phish.net too (syncRecappedShows), so it reaches the stats
+// within the hour; the full phish.net refresh stays nightly, and since 2026-09-17 so does
 // phish.in (scripts/refresh.js): its audio lands a day or two after a show,
 // so the hourly page of a thousand tracks was twenty-four heavy requests a
 // day for nothing, and their gateway's occasional 504 on it failed the run.
@@ -11,7 +13,7 @@ const { initDb, rebuildRecordedLengths } = require('../db/schema');
 const { syncBsky } = require('../lib/bsky');
 const { syncLivePhish } = require('../lib/livephish');
 const { createRunLog, pruneOldLogs } = require('../lib/log');
-const { syncScheduledShows, recordSyncState, recordSyncValue, contentFingerprint } = require('../lib/sync');
+const { syncScheduledShows, syncRecappedShows, recordSyncState, recordSyncValue, contentFingerprint } = require('../lib/sync');
 const { createClient } = require('../lib/phishnet-client');
 const { loadApiKey } = require('../lib/apikey');
 
@@ -36,6 +38,9 @@ async function main() {
     const steps = [
       ['Scheduled shows', () => syncScheduledShows(db, createClient({ apiKey: loadApiKey() }), { now: started }).then((r) => `${r.total} dates, ${r.upcoming.length} upcoming` + (r.upcoming[0] ? ` (next ${r.upcoming[0].showdate} ${r.upcoming[0].venue})` : ''))],
       ['Bluesky', () => syncBsky(db, fetch).then((r) => `${r.posts} song posts, ${r.shows.length} show(s), ${r.unmatched} unmatched`)],
+      // After Bluesky, which is where the "now available" recap arrives.
+      ['Recapped shows', () => syncRecappedShows(db, createClient({ apiKey: loadApiKey() }), { now: started }).then((r) =>
+        r.added.length ? `stored ${r.added.join(', ')} from phish.net` : r.waiting.length ? `waiting: ${r.waiting.join(' | ')}` : 'none pending')],
       ['LivePhish', () => syncLivePhish(db, fetch).then((r) => `${r.tracks} tracks for ${r.shows.length} new show(s)${r.shows.length ? ' (' + r.shows.join(', ') + ')' : ''}` + (r.failures.length ? `; failures: ${r.failures.join(' | ')}` : ''))],
       // The table the pages read lengths from, from whatever the LivePhish
       // sync above wrote and the nightly phish.in sync left. Runs even when
