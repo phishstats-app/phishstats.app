@@ -388,6 +388,17 @@
 
   /* Landing panels: tonight's opener calls and today in history ------------ */
   .landing { text-align: left; }
+  /* Tonight's forecast: the date beside the title, and its two parts. */
+  .tonight .head h2 small { font-size: .7em; font-weight: 400; color: var(--ink-dim); }
+  .tonight .subhead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 16px 0 8px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .tonight .subhead h3 { font-family: var(--mono); font-size: .72rem; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-dim); }
+  .tonight .sub-toggle { font: inherit; font-size: .76rem; color: var(--ink); padding: 2px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2); cursor: pointer; }
+  .tonight .sub-toggle:hover { border-color: rgba(228,87,46,.6); }
+  #callouts[hidden] { display: none; }
+  /* "Lately": one heading over the latest show and the season. */
+  .umbrella { margin-top: 28px; }
+  .umbrella-h { font-family: var(--mono); font-size: .74rem; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-dim); padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  .umbrella > div > .sec:first-child { margin-top: 14px; }
   /* Season cards: this run, this tour, the year. */
   .season .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; }
   .season .card .sub { font-size: .8rem; color: var(--ink-dim); margin: 2px 0 8px; }

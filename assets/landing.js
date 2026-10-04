@@ -163,7 +163,7 @@
     var tonight = state.live.filter(function (e) { return e.showdate === show.showdate; });
     var started = tonight.length > 0;
     var runNight = d.runShows.length + 1;
-    var head = '<div class="head"><h2>Tonight</h2><span>' + esc(show.venue) + ' · ' + esc(show.city + (show.state ? ', ' + show.state : '')) + '</span></div>' +
+    var head = '<div class="head"><h2>Tonight’s forecast <small>(' + fmtDate(show.showdate) + ')</small></h2><span>' + esc(show.venue) + ' · ' + esc(show.city + (show.state ? ', ' + show.state : '')) + '</span></div>' +
       '<div class="venue-line">Phish’s <b>' + P.ordinal(d.priorHere + 1) + '</b> show at ' + esc(show.venue) + (runNight > 1 ? ', <b>night ' + runNight + '</b> of this run' : '') + '.' +
       (d.runSongs.length ? ' <span class="vs">' + n(d.runSongs.length) + ' songs already played this run are left out below.</span>' : '') + '</div>';
 
@@ -199,11 +199,30 @@
         }).join('') + '</ol><div class="none">not played in 300+ shows, just for fun</div></div>';
     }
 
-    el.innerHTML = '<section class="sec landing tonight">' + head + state.wx +
+    // Two parts under one forecast: the weather, and the call-outs (the
+    // projected openers and long shots). The call-outs collapse to their
+    // heading; the choice is remembered in this browser.
+    var collapsed = calloutsCollapsed();
+    el.innerHTML = '<section class="sec landing tonight">' + head +
+      (state.wx ? '<div class="subhead"><h3>Weather</h3></div>' + state.wx : '') +
+      '<div class="subhead"><h3>Call-outs</h3><button type="button" class="sub-toggle" aria-expanded="' + !collapsed + '" aria-controls="callouts">' + (collapsed ? 'Show' : 'Hide') + '</button></div>' +
+      '<div id="callouts"' + (collapsed ? ' hidden' : '') + '>' +
       '<div class="segues">' + slotBlock('set1', 'Set 1 opener', set1Actual, 'opened set 1') + slotBlock('set2', 'Set 2 opener', set2Actual, 'opened set 2') +
         slotBlock('encore', 'Encore opener', encoreActual, 'opened the encore') + longshotBlock() + '</div>' +
       (!encoreActual ? '<div class="none" style="margin-top:8px">The lists reshuffle on each load, weighted toward the likely picks. Tap a song for its page.</div>' : '') +
-      '</section>';
+      '</div></section>';
+    el.querySelector('.sub-toggle').addEventListener('click', function () {
+      try { localStorage.setItem(CALLOUTS_KEY, collapsed ? '0' : '1'); } catch (e) {}
+      calloutsMemory = collapsed ? '0' : '1';
+      renderTonight();
+    });
+  }
+  // Remembered in localStorage, with an in-memory copy for a browser that
+  // blocks it, so the toggle still works for the life of the page.
+  var CALLOUTS_KEY = 'callouts:collapsed', calloutsMemory = null;
+  function calloutsCollapsed() {
+    if (calloutsMemory !== null) return calloutsMemory === '1';
+    try { return localStorage.getItem(CALLOUTS_KEY) === '1'; } catch (e) { return false; }
   }
 
   function loadTonight(el) {
@@ -351,7 +370,10 @@
   }
 
   function renderLanding(container) {
-    container.innerHTML = '<div id="landingTonight"></div><div id="landingLatest"></div><div id="landingSeason"></div><div id="landingHistory"></div>';
+    // "Lately" holds the latest show and the season, each still its own section.
+    container.innerHTML = '<div id="landingTonight"></div>' +
+      '<div class="umbrella"><h2 class="umbrella-h">Lately</h2><div id="landingLatest"></div><div id="landingSeason"></div></div>' +
+      '<div id="landingHistory"></div>';
     renderSeason(container.querySelector('#landingSeason'));
     Promise.all([api('landing/latest'), api('landing/latest-ranks')])
       .then(function (r) { renderLatest(container.querySelector('#landingLatest'), r[0][0], r[1]); })
