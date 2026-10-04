@@ -7,9 +7,14 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { withTimeout } = require('../lib/http');
 
-// A fetch that never answers unless aborted, as phish.in did.
+// A fetch that never answers unless aborted, as phish.in did. It holds the
+// event loop open the way a real stalled socket does: AbortSignal.timeout's
+// timer is unreferenced, so without that Node ends the test before it fires
+// (CI, Linux, 2026-10-04: "Promise resolution is still pending but the
+// event loop has already resolved").
 const hanging = (url, opts = {}) => new Promise((resolve, reject) => {
-  if (opts.signal) opts.signal.addEventListener('abort', () => reject(opts.signal.reason));
+  const socket = setInterval(() => {}, 1000);
+  opts.signal.addEventListener('abort', () => { clearInterval(socket); reject(opts.signal.reason); });
 });
 
 test('a request that does not answer in time is aborted with a message naming the host', async () => {
