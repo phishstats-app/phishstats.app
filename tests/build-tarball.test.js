@@ -84,8 +84,10 @@ test('the stamp matches the previous deploy tool and lands in every template ref
   assert.match(html, new RegExp(`/assets/app\\.js\\?v=${lines.assets}"`), 'an old stamp is replaced');
   assert.match(html, /\/assets\/icon\.svg"/, 'only css and js are stamped');
   const meta = JSON.parse(fs.readFileSync(path.join(extracted, 'build.json'), 'utf8'));
-  assert.deepEqual(Object.keys(meta).sort(), ['assets', 'commit', 'deployedAt', 'dirty']);
+  assert.deepEqual(Object.keys(meta).sort(), ['assets', 'commit', 'deployedAt', 'dirty', 'sha']);
   assert.equal(meta.commit, lines.commit);
+  assert.match(meta.sha, /^[0-9a-f]{40}$/, 'the full commit, for the footer link');
+  assert.ok(meta.sha.startsWith(meta.commit), 'the same commit as the short one');
   assert.equal(meta.assets, lines.assets);
   assert.equal(meta.dirty, false);
   assert.ok(!Number.isNaN(Date.parse(meta.deployedAt)));

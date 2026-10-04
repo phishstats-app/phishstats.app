@@ -19,6 +19,8 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
 commit=$(git -C "$src" rev-parse --short HEAD)
+# The full commit too: the footer links the build to it on the public repo.
+sha=$(git -C "$src" rev-parse HEAD)
 # Export the committed bytes as they are in the index (LF): a Windows git with
 # core.autocrlf=true would otherwise convert on the way out and the same
 # commit would build a different tarball, and a different stamp, than CI.
@@ -43,8 +45,8 @@ fi
 find "$work/templates" -name '*.html' -exec sed -i -E \
   's#(/assets/[a-z0-9-]+\.(css|js))(\?v=[A-Za-z0-9]+)?"#\1?v='"$stamp"'"#g' {} +
 
-printf '{"commit":"%s","dirty":false,"deployedAt":"%s","assets":"%s"}\n' \
-  "$commit" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$stamp" > "$work/build.json"
+printf '{"commit":"%s","sha":"%s","dirty":false,"deployedAt":"%s","assets":"%s"}\n' \
+  "$commit" "$sha" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$stamp" > "$work/build.json"
 
 mkdir -p "$out"
 tar -czf "$out/app.tgz" -C "$work" .

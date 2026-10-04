@@ -90,6 +90,31 @@ test('every page carries the build line after the compliance text', () => {
   }
 });
 
+// A CI build's commit is on the public repo, so its footer line links there,
+// in a new tab. A build from a checkout (the LAN copy runs the private repo)
+// or a dirty tree has no public commit to point at and stays plain text.
+const REPO = 'https://github.com/phishstats-app/phishstats.app/commit/';
+const SHA = 'd95dab0f64fe0171615d4cc669ec8b8630b886e5';
+test('build.json\'s full commit is read when it is one, and ignored when it is not', () => {
+  const dir = tmpDir();
+  fs.writeFileSync(path.join(dir, 'build.json'), JSON.stringify({ commit: 'd95dab0', sha: SHA, dirty: false, deployedAt: '2026-10-04T07:20:00Z', assets: 'x' }));
+  assert.equal(readBuild(dir).sha, SHA);
+  fs.writeFileSync(path.join(dir, 'build.json'), JSON.stringify({ commit: 'd95dab0', sha: 'not a sha', dirty: false }));
+  assert.equal(readBuild(dir).sha, null);
+});
+
+test('a CI build\'s footer links its commit on GitHub, in a new tab; a checkout\'s does not', () => {
+  const footer = (build) => Object.values(loadPages(ROOT, build))[0];
+  const ci = footer({ commit: 'd95dab0', sha: SHA, dirty: false, deployedAt: '2026-10-04T07:20:00Z', assets: 'x', source: 'build.json' });
+  assert.ok(ci.includes(`build <a href="${REPO}${SHA}" target="_blank" rel="noopener">d95dab0</a> · deployed 2026-10-04 07:20 UTC`), 'linked by its full commit');
+  const older = footer({ commit: 'd95dab0', sha: null, dirty: false, deployedAt: null, assets: 'x', source: 'build.json' });
+  assert.ok(older.includes(`<a href="${REPO}d95dab0" target="_blank" rel="noopener">d95dab0</a>`), 'a build.json from before the full commit was written links the short one');
+  const lan = footer({ commit: '5e0bfc3', dirty: false, deployedAt: null, assets: null, source: 'git' });
+  assert.ok(lan.includes('build 5e0bfc3') && !lan.includes(REPO), 'a checkout of the private repo is not linked');
+  const dirty = footer({ commit: 'd95dab0', sha: SHA, dirty: true, deployedAt: null, assets: 'x', source: 'build.json' });
+  assert.ok(dirty.includes('build d95dab0*') && !dirty.includes(REPO), 'a dirty build is not that commit');
+});
+
 test('/api/version reports the same build, uncached', async () => {
   const db = webFixtureHandle();
   const build = { commit: 'abc1234', dirty: false, deployedAt: '2026-09-13T18:02:11Z', assets: 'deadbeef', source: 'build.json' };
@@ -102,7 +127,7 @@ test('/api/version reports the same build, uncached', async () => {
     assert.equal(res.headers.get('cache-control'), 'no-store');
     assert.deepEqual(await res.json(), build);
     const page = await (await fetch(base + '/song')).text();
-    assert.ok(page.includes('build abc1234 · deployed 2026-09-13 18:02 UTC'));
+    assert.ok(page.includes('build <a href="https://github.com/phishstats-app/phishstats.app/commit/abc1234" target="_blank" rel="noopener">abc1234</a> · deployed 2026-09-13 18:02 UTC'));
   } finally {
     await new Promise((resolve) => server.close(resolve));
     db.close();
