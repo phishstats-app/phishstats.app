@@ -150,6 +150,22 @@ test('fetchFeedSince pages backwards until it passes the cutoff', async () => {
   assert.equal(posts[0].text, 'Today at Noon ET/9AM PT, Phish Radio has last night\'s full replay');
 });
 
+test('a post is timed from the earlier of its own stamp and when Bluesky received it', async () => {
+  // phish.com's posts carry a createdAt about 16 s in the future (every
+  // setlist post on 2026-10-03 was indexed 15-16 s before its own stamp).
+  const { postTime } = require('../lib/bsky');
+  assert.equal(postTime('2026-10-04T01:41:11.000Z', '2026-10-04T01:40:55.300Z'), '2026-10-04T01:40:55.300Z');
+  assert.equal(postTime('2026-10-04T01:41:11.000Z', '2026-10-04T01:41:12.400Z'), '2026-10-04T01:41:11.000Z', 'a normal indexing delay keeps the stamp');
+  assert.equal(postTime('2026-10-04T01:41:11.000Z', undefined), '2026-10-04T01:41:11.000Z');
+  assert.equal(postTime('2026-10-04T01:41:11.000Z', 'garbage'), '2026-10-04T01:41:11.000Z');
+
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ feed: [
+    { post: { uri: 'at://x/1', indexedAt: '2026-10-04T01:40:55.300Z', record: { text: "What's Going Through Your Mind", createdAt: '2026-10-04T01:41:11.000Z' } } },
+  ] }) });
+  const posts = await fetchFeedSince(fetchImpl, { actor: 'phish.com' });
+  assert.equal(posts[0].createdAt, '2026-10-04T01:40:55.300Z');
+});
+
 function wrap(p) {
   return { post: { uri: p.uri, record: { text: p.text, createdAt: p.createdAt } } };
 }

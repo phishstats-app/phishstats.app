@@ -276,6 +276,13 @@
   // BunnyCDN copy that was up to a minute old (2026-10-03: What's Going
   // Through Your Mind waited for a manual reload).
   var feedPosts = {}, socketPosts = {};
+  // When a post happened: the earlier of its createdAt and when Bluesky got
+  // it. phish.com stamps posts ~16 s in the future, which held a new song's
+  // clock at 0:00. Same rule as lib/bsky.js postTime.
+  function postTime(createdAt, receivedAt) {
+    var c = Date.parse(createdAt), r = Date.parse(receivedAt);
+    return !isNaN(r) && r < c ? new Date(r).toISOString() : createdAt;
+  }
   function applyPosts() {
     var merged = Object.assign({}, socketPosts, feedPosts);
     var all = parseLiveFeed(Object.keys(merged).map(function (k) { return merged[k]; }));
@@ -288,8 +295,8 @@
   // bounds how stale a copy can be while viewers in the same ten seconds
   // still share one. no-store keeps the browser's own cache (max-age=30) out.
   function feedUrl() { return BSKY_FEED + '&t=' + Math.floor(Date.now() / 10000); }
-  function addSocketPost(uri, record) {
-    socketPosts[uri] = { text: record.text, createdAt: record.createdAt };
+  function addSocketPost(uri, record, receivedAt) {
+    socketPosts[uri] = { text: record.text, createdAt: postTime(record.createdAt, receivedAt) };
     live.fetchedAt = new Date(); live.error = null;
     Promise.resolve().then(applyPosts).catch(function () {}).then(afterLive);
   }
@@ -297,7 +304,7 @@
     fetch(feedUrl(), { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(function (j) {
       feedPosts = {};
       (j.feed || []).filter(function (f) { return !f.reason && f.post && f.post.record; })
-        .forEach(function (f) { feedPosts[f.post.uri] = { text: f.post.record.text, createdAt: f.post.record.createdAt }; });
+        .forEach(function (f) { feedPosts[f.post.uri] = { text: f.post.record.text, createdAt: postTime(f.post.record.createdAt, f.post.indexedAt) }; });
       Object.keys(socketPosts).forEach(function (k) { if (feedPosts[k]) delete socketPosts[k]; });
       live.fetchedAt = new Date(); live.error = null;
       return applyPosts();
@@ -465,7 +472,7 @@
         // fetch a few seconds later reconciles: deletes, and anything missed.
         var c = m.kind === 'commit' && m.commit && m.commit.collection === 'app.bsky.feed.post' ? m.commit : null;
         var uri = c ? 'at://' + m.did + '/app.bsky.feed.post/' + c.rkey : null;
-        if (c && c.operation === 'create' && c.record && !c.record.reply && typeof c.record.text === 'string') addSocketPost(uri, c.record);
+        if (c && c.operation === 'create' && c.record && !c.record.reply && typeof c.record.text === 'string') addSocketPost(uri, c.record, m.time_us ? new Date(m.time_us / 1000).toISOString() : new Date().toISOString());
         if (c && c.operation === 'delete') delete socketPosts[uri];
         if (c) setTimeout(loadLive, 8000);
       } catch (e) {}
