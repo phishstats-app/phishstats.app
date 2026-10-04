@@ -42,7 +42,11 @@ test('a tour page reproduces the landing page\'s "this tour" card exactly', () =
   const y = latest.slice(0, 4) + '-01-01';
   const seasonShows = db.run('season/shows', { params: { y } });
   const seasonTops = db.run('season/tops', { params: { y } });
-  const tourname = seasonShows[seasonShows.length - 1].tourname;
+  // The newest tour can be a single night (the morning after a tour opens), and
+  // one show compares nothing, so walk back to the newest tour with two or more.
+  const tours = [...new Set(seasonShows.map((s) => s.tourname))].reverse();
+  const tourname = tours.find((t) => seasonShows.filter((s) => s.tourname === t).length > 1);
+  assert.ok(tourname, `no tour with two shows in ${y.slice(0, 4)}`);
   const fromLanding = seasonStats(
     seasonShows.filter((s) => s.tourname === tourname), seasonTops);
 
@@ -265,6 +269,9 @@ test('a year sits inside its era, and the eras partition the mirror', () => {
         `${y} is outside era ${era.name}`);
     }
   }
-  assert.equal(total, 1965, 'the eras must account for every Phish show');
+  const conn = new DatabaseSync(DB, { readOnly: true });
+  const all = conn.prepare("SELECT COUNT(*) AS n FROM shows WHERE artist_name = 'Phish' AND exclude = 0").get().n;
+  conn.close();
+  assert.equal(total, all, 'the eras must account for every Phish show');
   db.close();
 });

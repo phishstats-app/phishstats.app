@@ -86,6 +86,44 @@ test('refreshCurrent pulls songs plus every year due, records sync_state, and re
   db.close();
 });
 
+// The Atlantic City run: 10-02 is over, 10-03 has one song posted because the
+// rerun at 23:48 UTC caught Phish.net mid-show (2026-10-03).
+function acClient() {
+  const row = (showid, showdate, position, songid) => ({
+    showid, showdate, showyear: 2026, venueid: 1692, venue: 'Jim Whelan Boardwalk Hall', city: 'Atlantic City', state: 'NJ',
+    country: 'USA', tourid: 300, tourname: '2026 Fall Tour', permalink: 'p', setlistnotes: '', songid, set: '1', position,
+    transition: 1, trans_mark: ', ', is_original: 1, isjamchart: 0, gap: 0, footnote: '', artistid: 1, artist_name: 'Phish',
+  });
+  const client = makeFakeClient();
+  client.getSetlistsByYear = async () => [row(1002, '2026-10-02', 1, 1), row(1002, '2026-10-02', 2, 1), row(1003, '2026-10-03', 1, 1)];
+  return client;
+}
+
+test('refreshCurrent leaves out a show that may still be in progress', async () => {
+  const db = initDb(':memory:');
+  const r = await refreshCurrent(db, acClient(), { now: new Date('2026-10-03T23:48:00Z') });
+  assert.deepEqual(db.prepare('SELECT showdate FROM shows ORDER BY showdate').all().map((x) => x.showdate), ['2026-10-02']);
+  assert.deepEqual(r.newShows.map((s) => s.showdate), ['2026-10-02']);
+  assert.equal(r.setlistItems.after, 2);
+  db.close();
+});
+
+test('refreshCurrent removes a partial show an earlier run stored, and takes it whole the next morning', async () => {
+  const db = initDb(':memory:');
+  const { upsertSetlistRows } = require('../db/queries');
+  const partial = (await acClient().getSetlistsByYear(2026)).filter((x) => x.showid === 1003);
+  upsertSetlistRows(db, partial);
+
+  await refreshCurrent(db, acClient(), { now: new Date('2026-10-03T23:48:00Z') });
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM shows WHERE showid = 1003').get().n, 0);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM setlist_items WHERE showid = 1003').get().n, 0);
+
+  // 9 AM Mountain the next day: the show is over and comes in.
+  const next = await refreshCurrent(db, acClient(), { now: new Date('2026-10-04T15:00:00Z') });
+  assert.deepEqual(next.newShows.map((s) => s.showdate), ['2026-10-03']);
+  db.close();
+});
+
 test('refreshCurrent leaves sync_state untouched when the API call fails', async () => {
   const db = initDb(':memory:');
   const client = makeFakeClient();

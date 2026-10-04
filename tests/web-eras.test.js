@@ -48,6 +48,10 @@ test('every show in the mirror falls inside exactly one era', () => {
     const name = eraForDate(r.showdate).name;
     counts[name] = (counts[name] || 0) + 1;
   }
-  assert.deepEqual(counts, { '1.0': 1205, '2.0': 63, '3.0': 697 });
-  assert.equal(1205 + 63 + 697, rows.length);
+  // 1.0 and 2.0 are closed, so their counts are history; 3.0 grows every show
+  // night, so it is pinned only from below (697 on 2026-09-06).
+  assert.equal(counts['1.0'], 1205);
+  assert.equal(counts['2.0'], 63);
+  assert.ok(counts['3.0'] >= 697, `3.0 has ${counts['3.0']} shows`);
+  assert.equal(counts['1.0'] + counts['2.0'] + counts['3.0'], rows.length);
 });
