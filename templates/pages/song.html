@@ -404,10 +404,18 @@
         (playing && c ? ' data-cap="' + c.window.capAt.toISOString() + '"' : '') +
         '><button type="button" data-key="' + esc(bskyKey(e.song)) + '">' + esc(e.song) + '</button>' + t + noteHtml(note) + endHtml + '</li>';
     });
+    // Collapsed to its header line by choice, remembered per show in this
+    // browser; with no choice made it collapses once the show is over, so a
+    // finished setlist stops sitting on top of the page.
+    var cKey = 'livecollapse:' + last.showdate, cPref = null;
+    try { cPref = pressStore.getItem(cKey); } catch (e) {}
+    var collapsed = cPref !== null ? cPref === '1' : showOver;
     el.innerHTML =
-      '<div class="l-head' + (over ? ' over' : '') + '"><span class="pulse"></span><span><b>' + (over ? 'Final' : 'Live') + '</b> · <a href="' + P.showPage(last.showdate) + '" title="show page">' + esc(last.showdate.slice(5).replace('-', '/')) + ' ' + esc(last.location) + '</a>' +
-        (over ? ' · ended ' + esc(localTime(last.show_ended_at, false)) : '') + '</span>' +
-      '<span class="upd" data-fetched="' + live.fetchedAt.toISOString() + '">updated ' + clock(Date.now() - live.fetchedAt) + ' ago</span></div>' +
+      '<div class="l-head' + (over ? ' over' : '') + (collapsed ? ' collapsed' : '') + '"><span class="pulse"></span><span><b>' + (over ? 'Final' : showOver ? 'Ended' : 'Live') + '</b> · <a href="' + P.showPage(last.showdate) + '" title="show page">' + esc(last.showdate.slice(5).replace('-', '/')) + ' ' + esc(last.location) + '</a>' +
+        (over ? ' · ended ' + esc(localTime(last.show_ended_at, false)) : '') + (collapsed ? ' · ' + n(entries.length) + ' songs' : '') + '</span>' +
+      '<span class="upd" data-fetched="' + live.fetchedAt.toISOString() + '">updated ' + clock(Date.now() - live.fetchedAt) + ' ago</span>' +
+      '<button type="button" class="l-toggle" aria-controls="liveBody" aria-expanded="' + !collapsed + '">' + (collapsed ? 'Show setlist' : 'Hide') + '</button></div>' +
+      '<div class="l-body" id="liveBody"' + (collapsed ? ' hidden' : '') + '>' +
       (alerts.length ? (function () {
         alerts.sort(function (a, b) { return b.note.tier - a.note.tier || (b.playing ? 1 : 0) - (a.playing ? 1 : 0); });
         var top = alerts.slice(0, 3), anyProv = top.some(function (a) { return a.note.prov; });
@@ -419,8 +427,16 @@
       '<div class="l-foot">' + (Object.keys(live.official).length
         ? 'LP: official length from the LivePhish release. BS: post to post from <a href="https://bsky.app/profile/phish.com" target="_blank" rel="noopener">@phish.com</a>.'
         : 'BS: post to post from <a href="https://bsky.app/profile/phish.com" target="_blank" rel="noopener">@phish.com</a>, so the current song reads as "at least". LP lengths replace them once the LivePhish release is posted.') +
-        ' Notes under a song are judged from the catalog and every timed version on record; length-based ones stay provisional until the official times arrive. Tap a song to look it up.</div>';
+        ' Notes under a song are judged from the catalog and every timed version on record; length-based ones stay provisional until the official times arrive. Tap a song to look it up.</div></div>';
     el.hidden = false;
+    el.querySelector('.l-toggle').addEventListener('click', function () {
+      try {
+        // One show's choice at a time: older ones are cleared as this is set.
+        for (var i = pressStore.length - 1; i >= 0; i--) { var k = pressStore.key(i); if (k && k.indexOf('livecollapse:') === 0 && k !== cKey) pressStore.removeItem(k); }
+        pressStore.setItem(cKey, collapsed ? '0' : '1');
+      } catch (e) {}
+      renderLive();
+    });
     el.querySelectorAll('button[data-end]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var key = btn.dataset.endkey, act = btn.dataset.end, cur = LE.readPress(pressStore, key);
