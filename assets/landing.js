@@ -124,7 +124,7 @@
   }
 
   // ---- Tonight: likely openers ------------------------------------------
-  var state = { el: null, show: null, live: [], over: false, data: null, wx: '' };
+  var state = { el: null, show: null, live: [], overDate: null, data: null, wx: '' };
 
   // Weighted draw without replacement, weight = score squared, so the likely
   // songs show up nearly every time but the rest of the list changes on
@@ -190,7 +190,7 @@
     // the show is over, unless one of them was played: that stays up.
     function longshotBlock() {
       var anyHit = d.longshots.some(function (c) { return played[P.songKey(c.song)]; });
-      if (state.over && !anyHit) return '';
+      if (state.overDate === show.showdate && !anyHit) return '';
       return '<div class="seg"><h3>Long shots</h3><ol>' +
         d.longshots.map(function (c) {
           var hit = played[P.songKey(c.song)];
@@ -229,8 +229,15 @@
   }
 
   // Called by the page whenever the live feed updates.
-  // opts.over: the live panel's judgement that tonight is done (song.html).
-  function landingLive(entries, opts) { state.live = entries || []; state.over = !!(opts && opts.over); if (state.show) renderTonight(); }
+  // opts.over: the live panel's judgement that its show is done (song.html).
+  // It is kept with that show's date: after midnight the Tonight card is on
+  // the next show while the panel still holds last night's for a few hours,
+  // and "over" must not hide the new night's long shots (2026-10-04).
+  function landingLive(entries, opts) {
+    state.live = entries || [];
+    state.overDate = opts && opts.over && state.live.length ? state.live[state.live.length - 1].showdate : null;
+    if (state.show) renderTonight();
+  }
 
   // The most recent show on file, with the same notes the history list uses.
   function renderLatest(el, show, ranks) {
