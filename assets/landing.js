@@ -124,7 +124,7 @@
   }
 
   // ---- Tonight: likely openers ------------------------------------------
-  var state = { el: null, show: null, live: [], data: null, wx: '' };
+  var state = { el: null, show: null, live: [], over: false, data: null, wx: '' };
 
   // Weighted draw without replacement, weight = score squared, so the likely
   // songs show up nearly every time but the rest of the list changes on
@@ -186,8 +186,11 @@
     var encoreActual = tonight.filter(function (e) { return /^e/.test(e.set_label); })[0] || null;
 
     // Kept all show: one of these turning up is the best thing that can happen
-    // to this list, so a played one is marked rather than dropped.
+    // to this list, so a played one is marked rather than dropped. Gone once
+    // the show is over, unless one of them was played: that stays up.
     function longshotBlock() {
+      var anyHit = d.longshots.some(function (c) { return played[P.songKey(c.song)]; });
+      if (state.over && !anyHit) return '';
       return '<div class="seg"><h3>Long shots</h3><ol>' +
         d.longshots.map(function (c) {
           var hit = played[P.songKey(c.song)];
@@ -226,7 +229,8 @@
   }
 
   // Called by the page whenever the live feed updates.
-  function landingLive(entries) { state.live = entries || []; if (state.show) renderTonight(); }
+  // opts.over: the live panel's judgement that tonight is done (song.html).
+  function landingLive(entries, opts) { state.live = entries || []; state.over = !!(opts && opts.over); if (state.show) renderTonight(); }
 
   // The most recent show on file, with the same notes the history list uses.
   function renderLatest(el, show, ranks) {

@@ -312,7 +312,6 @@
   }
   function afterLive() {
       renderLive();
-      if (P.landingLive) P.landingLive(live.entries);
       // The venue section depends on tonight's location, so re-render the
       // song card once the feed has arrived (only when it changes anything).
       if (lastRender && !pickedVenueId) {
@@ -328,10 +327,17 @@
   function renderLive() {
     var el = $('live');
     var entries = live.entries || [];
-    if (!entries.length) { el.hidden = true; el.innerHTML = ''; return; }
+    if (!entries.length) { el.hidden = true; el.innerHTML = ''; if (P.landingLive) P.landingLive([], { over: false }); return; }
     var last = entries[entries.length - 1];
     var over = !!last.show_ended_at;
     var closers = closerStates(entries, over);
+    // Over for the Tonight card well before the "now available" post (a
+    // median 69 min after the last song): the encore closer has ended, by
+    // this visitor's press or by the cap. Set closers do not count, so a
+    // setbreak never reads as the end.
+    var lastState = closers.get(last) ? closers.get(last).state : null;
+    var showOver = over || (/^e/.test(last.set_label) && !!lastState && (lastState.kind === 'pressed' || lastState.kind === 'capped'));
+    if (P.landingLive) P.landingLive(entries, { over: showOver });
     // Attach official lengths to entries in setlist order.
     var queues = {};
     Object.keys(live.official).forEach(function (k) { queues[k] = live.official[k].slice(); });
@@ -386,7 +392,7 @@
         // A press inside the usual window is a length worth grading; an early one is not.
         if (e.posted_at.getTime() + st.seconds * 1000 >= c.window.earlyBefore.getTime()) noteFor = Object.assign({}, e, { approx_seconds: st.seconds });
       }
-      else if (st && st.kind === 'capped') t = '<span class="t capped" title="past where sets usually end, so the clock stopped; press Set’s over if you heard the end">≥' + clock(st.seconds * 1000) + '<small>setbreak?</small></span>';
+      else if (st && st.kind === 'capped') t = '<span class="t capped" title="past where sets usually end, so the clock stopped; press Set’s over if you heard the end">≥' + clock(st.seconds * 1000) + '<small>' + (/^e/.test(e.set_label) ? 'over?' : 'setbreak?') + '</small></span>';
       else if (st && st.kind === 'bounded') t = '<span class="t" title="from this song’s post to the next set’s start, setbreak included">≤' + approxMin(st.seconds) + '<small>incl. break</small></span>';
       else t = '<span class="t br" title="' + (e === last && over ? 'show over; no next post to time against' : 'set closer') + '">—</span>';
       var playing = st ? st.kind === 'running' && !e.official_seconds && e.approx_seconds == null : e === last && !over && !e.official_seconds;
