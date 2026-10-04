@@ -557,26 +557,34 @@
   // The whole career: the totals, then what stood out.
   function careerBlock(c, notes) {
     if (!c || !c.shows) return '';
+    // [label, value, the /browse page listing what it counts]. Both the label
+    // and the number link there; a row with no list behind it is plain.
+    var a = function (href, text) { return '<a href="' + href + '">' + text + '</a>'; };
     var rows = [
       ['Shows', n(c.shows)],
-      ['Years', n(c.years)],
-      ['Tours', n(c.tours)],
-      ['Venues', n(c.venues)],
-      ['Cities', n(c.cities)],
-      ['US states', n(c.us_states)],
-      ['Countries', n(c.countries)],
-      ['Different songs', n(c.songs) + ' <small>' + n(c.originals) + ' Phish originals</small>'],
+      ['Years', n(c.years), '/browse/years'],
+      ['Tours', n(c.tours), '/browse/tours'],
+      ['Venues', n(c.venues), '/browse/venues'],
+      ['Cities', n(c.cities), '/browse/cities'],
+      ['US states', n(c.us_states), '/browse/states'],
+      ['Countries', n(c.countries), '/browse/countries'],
+      ['Different songs', a('/browse/songs', n(c.songs)) + ' <small>' + a('/browse/songs?only=originals', n(c.originals) + ' originals') +
+        ' · ' + a('/browse/songs?only=covers', n(c.covers) + ' covers') + '</small>', '/browse/songs', true],
       ['Songs performed', n(c.performances)],
       ['Segues', n(c.segues)],
       ['Jam chart entries', n(c.jamcharts)],
-      ['Songs played once', n(c.one_and_done)],
+      ['Songs played once', n(c.one_and_done), '/browse/once'],
       ['Timed music', n(Math.round(c.timed_ms / 3600000)) + ' hours <small>' + n(c.timed) + ' versions</small>'],
     ];
     var lines = notableLines(notes, false);
     return '<section class="sec"><div class="head"><h2>The career</h2><span>' +
       fmtDate(c.first_show) + ' – ' + fmtDate(c.last_show) + '</span></div>' +
       '<div class="seg card"><div class="rows">' +
-      rows.map(function (r) { return '<div class="row"><span>' + r[0] + '</span><b>' + r[1] + '</b></div>'; }).join('') +
+      rows.map(function (r) {
+        // r[3]: the value already carries its own links.
+        var label = r[2] ? a(r[2], r[0]) : r[0], value = r[2] && !r[3] ? a(r[2], r[1]) : r[1];
+        return '<div class="row"><span>' + label + '</span><b>' + value + '</b></div>';
+      }).join('') +
       '</div>' + (lines.length ? '<div class="lines">' + lines.map(function (l) { return '<div>' + l + '</div>'; }).join('') + '</div>' : '') +
       '</div></section>';
   }

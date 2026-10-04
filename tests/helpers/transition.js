@@ -7,6 +7,10 @@
 // afterwards has to be named here, by hand, so that adding a statement is a
 // deliberate edit to this list rather than something a regex quietly absorbs.
 const ADDED_AFTER_TRANSITION = [
+  'browse/once',
+  'browse/songs',
+  'browse/venues',
+  'browse/years',
   'career/notables',
   'career/summary',
   'catalog/tours',

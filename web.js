@@ -60,6 +60,8 @@ const JSON_TYPE = 'application/json; charset=utf-8';
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const VENUE_ID = /^[1-9]\d{0,6}$/;
 const CITY_SLUG = /^[a-z0-9-]{1,80}$/;
+// /browse/<kind>: assets/browse.js renders each of these and nothing else.
+const BROWSE_KINDS = new Set(['years', 'tours', 'venues', 'cities', 'states', 'countries', 'songs', 'once']);
 
 // The date in /show/<date> is checked the same way the endpoint checks :d, so
 // an impossible day is a 404 rather than a page that fetches nothing.
@@ -262,6 +264,15 @@ function createWebServer({ db, rootDir = __dirname, build = readBuild(rootDir) }
       }
 
       if (pathname === '/eras') return sendHtml(res, pages.eras, method, req.headers['if-none-match']);
+
+      // The lists behind the career card's numbers. A fixed set of kinds,
+      // never free text; anything else is a 404.
+      const browse = /^\/browse\/([^/]+)$/.exec(pathname);
+      if (browse) {
+        const kind = decodeSegment(browse[1]);
+        if (kind === null || !BROWSE_KINDS.has(kind)) return notFound(res, method);
+        return sendHtml(res, pages.browse, method, req.headers['if-none-match']);
+      }
 
       // Era names are a fixed set from lib/web/eras.js, never free text.
       const era = /^\/era\/([^/]+)$/.exec(pathname);
