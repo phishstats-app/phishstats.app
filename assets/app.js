@@ -163,14 +163,20 @@
   // may return false to fall through to the default navigation.
   function mountSearch(opts) {
     var input = opts.input, suggest = opts.suggest, clearBtn = opts.clear;
-    var current = [], active = -1, cat = null;
+    var current = [], active = -1, cat = null, years = {};
     var ready = loadCatalog().then(function (c) { cat = c; if (opts.onCatalog) opts.onCatalog(c); return c; });
+    // The years with shows, so typing "1997" offers that year's page and a
+    // hiatus year (2006) offers nothing. 39 rows; a failure only loses that.
+    api('song/shows-by-year').then(function (rows) {
+      rows.forEach(function (r) { years[r.year] = r.n; });
+    }).catch(function () {});
 
     function match(term) {
       var t = term.trim().toLowerCase(), c = t.replace(/[^a-z0-9]/g, '');
       var out = [];
       var d = parseDate(term);
       if (d) out.push({ kind: 'show', name: fullDate(d), date: d, meta: 'show' });
+      if (/^\d{4}$/.test(t) && years[t]) out.push({ kind: 'year', name: t, year: t, meta: 'year · ' + n(years[t]) + ' shows' });
       if (!c) return out;
       var byPlays = function (a, b) { return (b.plays || b.shows || 0) - (a.plays || a.shows || 0); };
       var starts = [], words = [], contains = [];
@@ -217,6 +223,7 @@
       else if (it.kind === 'venue') location.href = venuePage(it.venueid);
       else if (it.kind === 'city') location.href = cityPage(it.city, it.state);
       else if (it.kind === 'show') location.href = showPage(it.date);
+      else if (it.kind === 'year') location.href = '/year/' + it.year;
     }
     input.addEventListener('input', function () { if (clearBtn) clearBtn.hidden = !input.value; ready.then(function () { render(match(input.value), input.value); }); });
     input.addEventListener('keydown', function (e) {
@@ -276,6 +283,39 @@
     if (gap >= 50) return { cls: 'hot', text: 'Bustout', sub: since };
     return { cls: 'gold', text: 'Overdue', sub: since };
   }
+
+  // The search bar sticks to the top of the viewport, so a jump to an anchor
+  // (#top-five) has to stop below it or the heading lands underneath. Its
+  // height differs by device (the hint line wraps on a narrow phone), so it
+  // is measured rather than guessed, and app.css reads it as --sticky-h.
+  function measureSticky() {
+    var bar = document.querySelector('.search');
+    if (bar) document.documentElement.style.setProperty('--sticky-h', bar.offsetHeight + 'px');
+  }
+  measureSticky();
+  window.addEventListener('resize', measureSticky);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(measureSticky);
+
+  // "Top": appears once the page has scrolled a screen or so, and goes back
+  // to the top in one press. Every page loads this file, so every page has it.
+  // Smooth unless the reader has asked for reduced motion.
+  (function () {
+    if (!document.body) return;
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'to-top';
+    btn.setAttribute('aria-label', 'Back to the top of the page');
+    btn.innerHTML = '<span aria-hidden="true">↑</span> Top';
+    btn.hidden = true;
+    document.body.appendChild(btn);
+    var calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    btn.addEventListener('click', function () {
+      window.scrollTo({ top: 0, behavior: calm ? 'auto' : 'smooth' });
+    });
+    var check = function () { btn.hidden = window.scrollY < 600; };
+    window.addEventListener('scroll', check, { passive: true });
+    check();
+  })();
 
   window.Phish = {
     api: api, esc: esc, n: n, pct: pct, yearOf: yearOf, fmtDate: fmtDate, longDate: longDate, fullDate: fullDate, shortMonth: shortMonth,

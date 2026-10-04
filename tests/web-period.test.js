@@ -112,6 +112,22 @@ test('year/tours lists the year\'s tours and never the untoured bucket', () => {
   db.close();
 });
 
+test('period/bustouts lists every bustout the landing card counts, uncapped', () => {
+  // The landing card's "and N more" lands on this list, so its length has to
+  // be the card's count: season/shows' bustout_names over the same year.
+  const db = webFixtureHandle();
+  for (const y of [...db.years()]) {
+    const res = call(db, 'period/bustouts', { year: String(y) });
+    assert.equal(res.status, 200, String(y));
+    const counted = call(db, 'season/shows', { y: y + '-01-01' }).body
+      .filter((r) => r.showdate.slice(0, 4) === String(y))
+      .reduce((a, r) => a + (r.bustout_names ? r.bustout_names.split(';').length : 0), 0);
+    assert.equal(res.body.length, counted, String(y));
+  }
+  assert.equal(call(db, 'period/bustouts', { year: '2005' }).status, 400, 'a hiatus year');
+  db.close();
+});
+
 test('year/untoured returns that year\'s bucket shows', () => {
   const db = webFixtureHandle();
   const res = call(db, 'year/untoured', { year: '1990' });

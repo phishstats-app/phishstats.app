@@ -277,7 +277,9 @@
   // file, partitioned in the browser: per-show stats, and every version
   // that ranks in its song's all-time top five. "Year in review" replaces
   // "year so far" once the year's last scheduled show has been played.
-  function seasonCard(title, sub, st, ref, extra) {
+  // year: the season's year, where the card's "and N more" links lead. The
+  // run and tour cards use it too: their lists are subsets of the year's.
+  function seasonCard(title, sub, st, ref, year, extra) {
     if (!st) return '';
     function cmp(v, ref, fmt, higherIsMore) {
       if (!ref || ref === v) return '';
@@ -294,11 +296,17 @@
       ['Music per show', st.music ? Math.round(st.music / 60000) + ' min' : '–', '']
     ];
     var lines = [];
-    if (st.longest) lines.push('<b>Longest song</b> ' + esc(st.longest.longest_song) + ' ' + mmss(st.longest.longest_ms) + ' <a href="' + P.showPage(st.longest.showdate) + '">' + fmtDate(st.longest.showdate) + '</a>');
-    if (st.firsts.length) lines.push('<b class="gold">All-time longest</b> ' + st.firsts.slice(0, 6).map(function (t) { return esc(t.song) + ' <a href="' + P.showPage(t.show_date) + '">' + fmtDate(t.show_date) + '</a>'; }).join(', ') + (st.firsts.length > 6 ? ' and ' + n(st.firsts.length - 6) + ' more' : ''));
-    if (st.tops.length) lines.push('<b>Top-five versions</b> ' + n(st.tops.length) + (st.tops.length > st.firsts.length && st.tops.length <= 8 ? ': ' + st.tops.filter(function (t) { return t.rnk > 1; }).map(function (t) { return esc(t.song) + ' #' + t.rnk; }).join(', ') : ''));
-    if (st.bustouts.length) lines.push('<b class="red">Bustouts</b> ' + n(st.bustouts.length) + ': ' + st.bustouts.slice(0, 5).map(function (b) { return esc(b.song) + ' (' + n(b.gap) + ')'; }).join(', ') + (st.bustouts.length > 5 ? ', …' : ''));
-    if (st.debuts.length) lines.push('<b class="green">Debuts</b> ' + st.debuts.slice(0, 6).map(function (d) { return esc(d.song); }).join(', ') + (st.debuts.length > 6 ? ' and ' + n(st.debuts.length - 6) + ' more' : ''));
+    // Each named version carries a link to its show, and a list too long for
+    // the card ends in "and N more", which opens that list in full on the
+    // year page.
+    var on = function (date) { return ' <a href="' + P.showPage(date) + '">' + fmtDate(date) + '</a>'; };
+    var more = function (rest, anchor) { return rest > 0 ? ' and <a href="/year/' + year + '#' + anchor + '">' + n(rest) + ' more</a>' : ''; };
+    var others = st.tops.filter(function (t) { return t.rnk > 1; }).sort(function (a, b) { return a.rnk - b.rnk || b.ms - a.ms; });
+    if (st.longest) lines.push('<b>Longest song</b> ' + esc(st.longest.longest_song) + ' ' + mmss(st.longest.longest_ms) + on(st.longest.showdate));
+    if (st.firsts.length) lines.push('<b class="gold">All-time longest</b> ' + st.firsts.slice(0, 6).map(function (t) { return esc(t.song) + on(t.show_date); }).join(', ') + more(st.firsts.length - 6, 'longest-ever'));
+    if (st.tops.length) lines.push('<b>Top-five versions</b> ' + n(st.tops.length) + (others.length ? ': ' + others.slice(0, 6).map(function (t) { return esc(t.song) + ' #' + t.rnk + on(t.show_date); }).join(', ') + more(others.length - 6, 'top-five') : ''));
+    if (st.bustouts.length) lines.push('<b class="red">Bustouts</b> ' + n(st.bustouts.length) + ': ' + st.bustouts.slice(0, 5).map(function (b) { return esc(b.song) + ' (' + n(b.gap) + ')' + on(b.date); }).join(', ') + more(st.bustouts.length - 5, 'bustouts'));
+    if (st.debuts.length) lines.push('<b class="green">Debuts</b> ' + st.debuts.slice(0, 6).map(function (d) { return esc(d.song) + on(d.date); }).join(', ') + more(st.debuts.length - 6, 'debuts'));
     (extra || []).forEach(function (x) { lines.push(x); });
     // title is HTML: the tour card's is a link. Callers escape their own.
     return '<div class="seg card"><h3>' + title + '</h3><div class="sub">' + sub + '</div>' +
@@ -353,15 +361,15 @@
         var tourIsRun = tour.length === run.length && run.every(function (s) { return s.tourname === tourName; });
         var nights = function (k) { return n(k) + (k === 1 ? ' night' : ' nights'); };
         var cards = [];
-        if (showRun) cards.push(seasonCard('This run', esc(last.venue) + ' · ' + nights(run.length) + (runOngoing ? ' so far' : '') + ', ' + span(run) + (tourIsRun && tourName ? ' · opens ' + tourTitle(tourName) : ''), runSt, yearSt));
-        if (tour.length && tour.length !== shows.length && !(tourIsRun && showRun)) cards.push(seasonCard(tourTitle(tourName), n(tour.length) + (tour.length === 1 ? ' show' : ' shows') + ', ' + span(tour) + (showRun && tour.length > run.length ? ' · run included' : ''), tourSt, yearSt));
+        if (showRun) cards.push(seasonCard('This run', esc(last.venue) + ' · ' + nights(run.length) + (runOngoing ? ' so far' : '') + ', ' + span(run) + (tourIsRun && tourName ? ' · opens ' + tourTitle(tourName) : ''), runSt, yearSt, year));
+        if (tour.length && tour.length !== shows.length && !(tourIsRun && showRun)) cards.push(seasonCard(tourTitle(tourName), n(tour.length) + (tour.length === 1 ? ' show' : ' shows') + ', ' + span(tour) + (showRun && tour.length > run.length ? ' · run included' : ''), tourSt, yearSt, year));
         var extra = [];
         if (review && r[2] && r[2][0]) {
           var rv = r[2][0];
           extra.push('<b>Breadth</b> ' + n(rv.distinct_songs) + ' different songs across ' + n(rv.venues) + ' venues in ' + n(rv.cities) + ' cities');
           if (r[3] && r[3].length) extra.push('<b>Most played</b> ' + r[3].map(function (m) { return esc(m.song) + ' ×' + m.n; }).join(', '));
         }
-        cards.push(seasonCard(review ? year + ' in review' : year + ' so far', n(shows.length) + ' shows, ' + span(shows) + (review ? ' · the year is done' : ''), yearSt, null, extra));
+        cards.push(seasonCard(review ? year + ' in review' : year + ' so far', n(shows.length) + ' shows, ' + span(shows) + (review ? ' · the year is done' : ''), yearSt, null, year, extra));
         el.innerHTML = '<section class="sec landing season' + (review ? ' review' : '') + '"><div class="head"><h2>' + (review ? year + ' in review' : 'The season') + '</h2><span>run · tour · year, each against the year\u2019s average</span></div>' +
           '<div class="cards">' + cards.join('') + '</div>' +
           '<div class="none">Lengths are official LivePhish times where released, otherwise phish.in recordings; rankings are among timed versions. Jam chart entries arrive on phish.net later and are not counted here.</div></section>';

@@ -32,7 +32,9 @@ test('the warm list covers the landing page, every era and the current year, dat
     '/api/landing/history-ranks?md=09-14', '/api/catalog/songs',
     '/api/period/summary?era=1.0', '/api/period/summary?era=2.0', '/api/period/summary?era=3.0',
     '/api/era/years?era=3.0',
-    '/api/period/summary?year=2026', '/api/period/firsts?year=2026', '/api/year/tours?year=2026',
+    '/api/period/summary?year=2026', '/api/period/tops?year=2026', '/api/period/bustouts?year=2026',
+    '/api/period/tops?era=3.0', '/api/period/bustouts?era=3.0',
+    '/api/year/tours?year=2026',
   ]) {
     assert.ok(list.includes(expected), `${expected} is warmed`);
   }

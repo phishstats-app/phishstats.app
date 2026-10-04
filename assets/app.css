@@ -201,6 +201,33 @@
   .sec .head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 10px; }
   .sec .head a, .sec .head span { font-size: .8rem; color: var(--ink-dim); }
   .sec .head a:hover { color: var(--ink); }
+  /* A section linked by anchor (/year/2026#bustouts) lands below the sticky search bar. */
+  .sec[id] { scroll-margin-top: calc(var(--sticky-h, 110px) + 12px); }
+  /* Fold a section to its heading; same look as the forecast's call-outs toggle. */
+  /* On a phone the count wraps; keep it and the toggle against the right edge. */
+  .sec .head span:has(.sec-toggle) { text-align: right; }
+  .sec .head .sec-toggle { white-space: nowrap; font: inherit; font-size: .76rem; color: var(--ink); margin-left: 8px; padding: 2px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2); cursor: pointer; }
+  .sec .head .sec-toggle:hover { border-color: rgba(228,87,46,.6); }
+  /* Back to the top, bottom right, once the page has scrolled. */
+  .to-top { position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 6; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2); color: var(--ink); font: 500 .85rem var(--body); box-shadow: 0 4px 14px rgba(0,0,0,.35); cursor: pointer; }
+  .to-top:hover { border-color: rgba(228,87,46,.6); }
+  .to-top[hidden] { display: none; }
+  /* The eras side by side on /eras. */
+  .cmp { width: 100%; border-collapse: collapse; font-size: .88rem; }
+  .cmp th, .cmp td { padding: 7px 6px; text-align: right; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+  .cmp tr:last-child th, .cmp tr:last-child td { border-bottom: 0; }
+  .cmp thead th { font: 500 .8rem var(--mono); }
+  .cmp thead a:hover { color: var(--blue); }
+  .cmp tbody th { text-align: left; font-weight: 400; color: var(--ink-dim); }
+  .cmp td { font-family: var(--mono); }
+  /* The whole-career column, set off from the eras it sums. */
+  .cmp .all { border-left: 1px solid var(--line); padding-left: 10px; color: var(--ink); }
+  .cmp thead th.all { color: var(--gold); }
+  .cmp td small { display: block; font-size: .72rem; color: var(--ink-faint); }
+  /* Links to the lists further down a page, under the card they follow. */
+  .jumps { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .jumps a { display: inline-flex; align-items: center; min-height: 30px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; font-size: .8rem; color: var(--ink-dim); background: var(--surface); }
+  .jumps a:hover { color: var(--ink); border-color: var(--ink-dim); }
 
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
   .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-width: 0; }
@@ -216,6 +243,7 @@
   .perf .venue { color: var(--ink-dim); font-size: .9rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .perf .gap { font-family: var(--mono); font-size: .8rem; color: var(--ink-dim); text-align: right; }
   .perf .gap.hot { color: var(--red); font-weight: 500; }
+  .perf .gap.gold { color: var(--gold); font-weight: 500; }
   .perf .slot { grid-column: 1 / -1; font-family: var(--mono); font-size: .76rem; color: var(--ink-faint); display: flex; flex-wrap: wrap; gap: 6px 12px; }
   .perf .slot .jc { color: var(--gold); }
   .perf .slot .mark { color: var(--red); }

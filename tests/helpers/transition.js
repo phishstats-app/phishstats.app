@@ -7,8 +7,11 @@
 // afterwards has to be named here, by hand, so that adding a statement is a
 // deliberate edit to this list rather than something a regex quietly absorbs.
 const ADDED_AFTER_TRANSITION = [
+  'career/notables',
+  'career/summary',
   'catalog/tours',
   'era/years',
+  'eras/compare',
   'eras/index',
   'landing/encore-openers',
   'live/set-lengths',
@@ -17,6 +20,7 @@ const ADDED_AFTER_TRANSITION = [
   'period/core',
   'period/debuts',
   'period/firsts',
+  'period/notables',
   'period/shows',
   'period/songs',
   'period/stats',
