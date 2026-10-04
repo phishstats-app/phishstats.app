@@ -154,6 +154,13 @@ function createWebServer({ db, rootDir = __dirname, build = readBuild(rootDir) }
   // balancer can be compared with curl instead of by reading HTML.
   const version = JSON.stringify(build);
 
+  // The venue Phish.net rolls this id into (lib/venues.js), or null when it is
+  // its own venue or unknown. A database published before the venues table
+  // existed has nothing to say, and every caller then carries on as before.
+  function venueRoot(id) {
+    try { const r = db.run('venue/root', { params: { v: id } }); return r.length ? r[0].root : null; } catch (e) { return null; }
+  }
+
   return http.createServer((req, res) => {
     const method = req.method;
     if (method !== 'GET' && method !== 'HEAD') {
@@ -198,7 +205,17 @@ function createWebServer({ db, rootDir = __dirname, build = readBuild(rootDir) }
       // Caddy also does this in production; doing it here too means the server
       // behaves the same when reached directly, as the harness reaches it.
       if (pathname === '/') return redirect(res, '/song', method);
-      if (pathname === '/song') return sendHtml(res, pages.song, method, req.headers['if-none-match']);
+      if (pathname === '/song') {
+        // ?venue= naming a venue Phish.net aliases under another moves to the
+        // root, as /venue/<id> does, so the comparison finds it.
+        const v = url.searchParams.get('venue');
+        const root = v && VENUE_ID.test(v) ? venueRoot(Number(v)) : null;
+        if (root !== null && root !== Number(v)) {
+          url.searchParams.set('venue', String(root));
+          return redirect(res, '/song?' + url.searchParams.toString(), method);
+        }
+        return sendHtml(res, pages.song, method, req.headers['if-none-match']);
+      }
       if (pathname === '/about') return sendHtml(res, pages.about, method, req.headers['if-none-match']);
 
       // /show/latest and /show/random resolve here rather than in the browser:
@@ -222,10 +239,8 @@ function createWebServer({ db, rootDir = __dirname, build = readBuild(rootDir) }
         const id = decodeSegment(venue[1]);
         if (id === null || !VENUE_ID.test(id)) return notFound(res, method);
         // A venue Phish.net aliases under another (1692 -> 777) lives at its
-        // root's URL. 302, not 301: Phish.net can drop an alias. A database
-        // published before the venues table existed just serves the page.
-        let root = null;
-        try { const r = db.run('venue/root', { params: { v: Number(id) } }); root = r.length ? r[0].root : null; } catch (e) { root = null; }
+        // root's URL. 302, not 301: Phish.net can drop an alias.
+        const root = venueRoot(Number(id));
         if (root !== null && root !== Number(id)) return redirect(res, '/venue/' + root, method);
         return sendHtml(res, pages.venue, method, req.headers['if-none-match']);
       }

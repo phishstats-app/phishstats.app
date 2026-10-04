@@ -185,12 +185,14 @@
     var set2Actual = tonight.filter(function (e) { return e.set_label === '2'; })[0] || null;
     var encoreActual = tonight.filter(function (e) { return /^e/.test(e.set_label); })[0] || null;
 
+    // Kept all show: one of these turning up is the best thing that can happen
+    // to this list, so a played one is marked rather than dropped.
     function longshotBlock() {
-      if (started) return '';
       return '<div class="seg"><h3>Long shots</h3><ol>' +
         d.longshots.map(function (c) {
-          return '<li><span class="t">' + songLink(c.song) + (P.isCover(c.artist) ? '<span class="cover">' + esc(c.artist) + '</span>' : '') + '</span>' +
-            '<span class="n">gap ' + n(c.gap) + ' · last ' + fmtDate(c.last_played) + '</span></li>';
+          var hit = played[P.songKey(c.song)];
+          return '<li' + (hit ? ' class="hit"' : '') + '><span class="t">' + songLink(c.song) + (P.isCover(c.artist) ? '<span class="cover">' + esc(c.artist) + '</span>' : '') + '</span>' +
+            '<span class="n">' + (hit ? '<b>played tonight</b> · ' : '') + 'gap ' + n(c.gap) + ' · last ' + fmtDate(c.last_played) + '</span></li>';
         }).join('') + '</ol><div class="none">not played in 300+ shows, just for fun</div></div>';
     }
 

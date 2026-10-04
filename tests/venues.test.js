@@ -97,5 +97,6 @@ test('a merged venue is named after its latest show, and counted as one', () => 
   assert.equal(core.shows, 2);
   const cat = db.prepare(STATEMENTS['catalog/venues']).all();
   assert.deepEqual(cat.map((r) => [r.venueid, r.venue, r.shows]), [[777, 'Jim Whelan Boardwalk Hall', 2]]);
+  assert.deepEqual(cat[0].names.split('\n').sort(), ['Boardwalk Hall', 'Jim Whelan Boardwalk Hall'], 'every name it has had, for search');
   assert.equal(db.prepare(STATEMENTS['venue/root']).get({ v: 1692 }).root, 777);
 });

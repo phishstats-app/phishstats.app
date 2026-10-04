@@ -51,6 +51,12 @@ test('an aliased venue id redirects to the venue Phish.net rolls it into', async
     assert.equal(res.headers.get('location'), '/venue/1');
     assert.equal((await get(base, '/venue/1')).status, 200, 'the root itself is served');
     assert.equal((await get(base, '/venue/4242')).status, 200, 'an id Phish.net does not list is served as before');
+
+    const song = await get(base, '/song?song=Glide&venue=1692');
+    assert.equal(song.status, 302, 'the song page venue comparison moves to the root too');
+    assert.equal(song.headers.get('location'), '/song?song=Glide&venue=1');
+    assert.equal((await get(base, '/song?song=Glide&venue=1')).status, 200);
+    assert.equal((await get(base, '/song?venue=abc')).status, 200, 'a malformed venue is left to the page');
   }, aliases);
 });
 

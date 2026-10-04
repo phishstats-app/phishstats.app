@@ -103,7 +103,13 @@
       api('catalog/venues'),
     ]).then(function (res) {
       var songs = res[0].map(function (r) { var key = String(r.song).toLowerCase(); return { kind: 'song', id: r.songid, name: r.song, artist: r.artist, plays: r.times_played, gap: r.gap, key: key, compact: key.replace(/[^a-z0-9]/g, '') }; });
-      var venues = res[1].map(function (v) { var key = (v.venue + ' ' + v.city + ' ' + v.state).toLowerCase(); return Object.assign({ kind: 'venue', name: v.venue, key: key, compact: key.replace(/[^a-z0-9]/g, '') }, v); });
+      // A merged venue (Phish.net alias) is matched on every name it has had,
+      // so "Deer Creek" still finds Ruoff Music Center.
+      var venues = res[1].map(function (v) {
+        var former = String(v.names || '').split('\n').filter(function (x) { return x && x !== v.venue; });
+        var key = [v.venue].concat(former, [v.city, v.state]).join(' ').toLowerCase();
+        return Object.assign({ kind: 'venue', name: v.venue, former: former, key: key, compact: key.replace(/[^a-z0-9]/g, '') }, v);
+      });
       var cityMap = {};
       res[1].forEach(function (v) {
         var k = citySlug(v.city, v.state);
@@ -175,9 +181,14 @@
       // Songs first, then a few places, capped so the list stays thumb-sized.
       return out.concat(songs.slice(0, 6), venues.slice(0, 2), cities.slice(0, 2)).slice(0, 9);
     }
-    function meta(it) {
+    function meta(it, term) {
       if (it.kind === 'song') return n(it.plays) + '×' + (it.artist && it.artist !== 'Phish' ? ' · ' + esc(it.artist) : '');
-      if (it.kind === 'venue') return 'venue · ' + n(it.shows) + ' shows · ' + esc(it.city + ', ' + it.state);
+      if (it.kind === 'venue') {
+        // Matched on an older name: say which, or the result looks unrelated.
+        var c = String(term || '').toLowerCase().replace(/[^a-z0-9]/g, ''), cur = it.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        var was = c && cur.indexOf(c) < 0 ? (it.former || []).filter(function (x) { return x.toLowerCase().replace(/[^a-z0-9]/g, '').indexOf(c) >= 0; })[0] : null;
+        return 'venue · ' + n(it.shows) + ' shows · ' + esc(it.city + ', ' + it.state) + (was ? ' · formerly ' + esc(was) : '');
+      }
       if (it.kind === 'city') return 'city · ' + n(it.shows) + ' shows';
       return it.meta || '';
     }
@@ -186,7 +197,7 @@
       if (!list.length) { suggest.hidden = true; suggest.innerHTML = ''; return; }
       var re = new RegExp('(' + term.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'i');
       suggest.innerHTML = list.map(function (it, i) {
-        return '<button type="button" role="option" data-i="' + i + '"><span class="s-name">' + esc(it.name).replace(re, '<em>$1</em>') + '</span><span class="s-meta">' + meta(it) + '</span></button>';
+        return '<button type="button" role="option" data-i="' + i + '"><span class="s-name">' + esc(it.name).replace(re, '<em>$1</em>') + '</span><span class="s-meta">' + meta(it, term) + '</span></button>';
       }).join('');
       suggest.hidden = false;
     }
