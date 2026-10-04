@@ -125,12 +125,19 @@ function sendHtml(res, page, method, ifNoneMatch) {
   return send(res, 200, { 'Content-Type': HTML, 'Cache-Control': PAGE_CACHE, ETag: page.etag, ...page.headers }, page.html, method);
 }
 
-const sendJson = (res, status, value, method) =>
-  send(res, status, {
-    'Content-Type': JSON_TYPE,
-    // Inert without the page that reads them, so they may be held briefly.
-    'Cache-Control': 'private, max-age=3600',
-  }, JSON.stringify(value), method);
+// Data revalidates on every request, as the pages do: private (inert without
+// the page that reads it), no-cache with a strong ETag over the body, and a
+// 304 when nothing changed. It was max-age=3600, and a page loaded before a
+// night's LivePhish release kept the empty answer for an hour after the
+// times arrived (2026-10-03); the morning's new show waited the same way.
+// Errors are never held.
+function sendJson(res, status, value, method, ifNoneMatch) {
+  const body = JSON.stringify(value);
+  if (status !== 200) return send(res, status, { 'Content-Type': JSON_TYPE, 'Cache-Control': 'no-store' }, body, method);
+  const etag = '"' + crypto.createHash('sha1').update(body).digest('hex') + '"';
+  if (etagMatches(ifNoneMatch, etag)) return send(res, 304, { ETag: etag, 'Cache-Control': 'private, no-cache' }, undefined, method);
+  return send(res, 200, { 'Content-Type': JSON_TYPE, 'Cache-Control': 'private, no-cache', ETag: etag }, body, method);
+}
 
 const notFound = (res, method) =>
   send(res, 404, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
@@ -187,7 +194,7 @@ function createWebServer({ db, rootDir = __dirname, build = readBuild(rootDir) }
       if (pathname.startsWith('/api/')) {
         const query = Object.fromEntries(url.searchParams);
         const result = handleApi({ pathname, query }, db);
-        return sendJson(res, result.status, result.body, method);
+        return sendJson(res, result.status, result.body, method, req.headers['if-none-match']);
       }
 
       // ---- assets ---------------------------------------------------------

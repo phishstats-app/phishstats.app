@@ -13,7 +13,10 @@
   function api(name, params) {
     var u = new URL('/api/' + name, location.origin);
     Object.keys(params || {}).forEach(function (k) { u.searchParams.set(k, params[k]); });
-    return fetch(u).then(function (r) {
+    // no-cache: always revalidate (the server answers 304 when nothing
+    // changed). Also overrides answers still held from when the API sent
+    // max-age=3600, which kept a night's LivePhish times away for an hour.
+    return fetch(u, { cache: 'no-cache' }).then(function (r) {
       if (!r.ok) return r.text().then(function (t) {
         var detail = t;
         // Endpoints answer failures as { "error": "..." }; show that rather

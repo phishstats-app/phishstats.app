@@ -40,6 +40,29 @@ const sha256 = (text) => "'sha256-" + crypto.createHash('sha256').update(text, '
 const PAGES = ['/song', '/show/2026-07-22', '/venue/1', '/city/other-city-os', '/tour/1',
   '/year/2026', '/era/3.0', '/eras', '/about'];
 
+// Data revalidates like the pages: the browser asks every time and usually
+// hears 304. It used to be max-age=3600, so a page loaded before the night's
+// LivePhish release kept the empty answer for an hour after it (2026-10-03).
+test('data is revalidated on every request: no-cache, a strong ETag, and 304 when unchanged', async () => {
+  await withServer(async (base) => {
+    const first = await get(base, '/api/landing/latest');
+    assert.equal(first.status, 200);
+    assert.equal(first.headers.get('cache-control'), 'private, no-cache');
+    const tag = first.headers.get('etag');
+    assert.match(tag, /^"[0-9a-f]{40}"$/);
+    const again = await fetch(base + '/api/landing/latest', { headers: { 'If-None-Match': tag } });
+    assert.equal(again.status, 304);
+    assert.equal(again.headers.get('etag'), tag);
+    assert.equal(await again.text(), '');
+    const other = await get(base, '/api/landing/history?md=07-22');
+    assert.notEqual(other.headers.get('etag'), tag, 'the tag is over the body');
+    const bad = await get(base, '/api/landing/history?md=7-22');
+    assert.equal(bad.status, 400);
+    assert.equal(bad.headers.get('cache-control'), 'no-store', 'an error is never held');
+    assert.equal(bad.headers.get('etag'), null);
+  });
+});
+
 test('every page carries a CSP whose script-src is self plus the hash of its own inline script', async () => {
   await withServer(async (base) => {
     for (const p of PAGES) {
