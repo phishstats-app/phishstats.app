@@ -16,6 +16,12 @@ const { createRunLog, pruneOldLogs } = require('../lib/log');
 const { syncScheduledShows, syncRecappedShows, recordSyncState, recordSyncValue, contentFingerprint } = require('../lib/sync');
 const { createClient } = require('../lib/phishnet-client');
 const { loadApiKey } = require('../lib/apikey');
+const { withTimeout } = require('../lib/http');
+
+// Every outside call is bounded, since the job holds the database lock while
+// it runs (lib/http.js). phish.in's gateway can take a minute on a heavy page.
+const quickFetch = withTimeout(fetch, 30 * 1000);
+const phishinFetch = withTimeout(fetch, 90 * 1000);
 
 const ROOT = path.join(__dirname, '..');
 const DB_PATH = process.env.PHISH_DB_PATH || path.join(ROOT, 'data', 'phish.db');
@@ -36,12 +42,12 @@ async function main() {
     const fingerprintBefore = contentFingerprint(db);
 
     const steps = [
-      ['Scheduled shows', () => syncScheduledShows(db, createClient({ apiKey: loadApiKey() }), { now: started }).then((r) => `${r.total} dates, ${r.upcoming.length} upcoming` + (r.upcoming[0] ? ` (next ${r.upcoming[0].showdate} ${r.upcoming[0].venue})` : ''))],
-      ['Bluesky', () => syncBsky(db, fetch).then((r) => `${r.posts} song posts, ${r.shows.length} show(s), ${r.unmatched} unmatched`)],
+      ['Scheduled shows', () => syncScheduledShows(db, createClient({ apiKey: loadApiKey(), fetchImpl: quickFetch }), { now: started }).then((r) => `${r.total} dates, ${r.upcoming.length} upcoming` + (r.upcoming[0] ? ` (next ${r.upcoming[0].showdate} ${r.upcoming[0].venue})` : ''))],
+      ['Bluesky', () => syncBsky(db, quickFetch).then((r) => `${r.posts} song posts, ${r.shows.length} show(s), ${r.unmatched} unmatched`)],
       // After Bluesky, which is where the "now available" recap arrives.
-      ['Recapped shows', () => syncRecappedShows(db, createClient({ apiKey: loadApiKey() }), { now: started }).then((r) =>
+      ['Recapped shows', () => syncRecappedShows(db, createClient({ apiKey: loadApiKey(), fetchImpl: quickFetch }), { now: started }).then((r) =>
         r.added.length ? `stored ${r.added.join(', ')} from phish.net` : r.waiting.length ? `waiting: ${r.waiting.join(' | ')}` : 'none pending')],
-      ['LivePhish', () => syncLivePhish(db, fetch).then((r) => `${r.tracks} tracks for ${r.shows.length} new show(s)${r.shows.length ? ' (' + r.shows.join(', ') + ')' : ''}` + (r.failures.length ? `; failures: ${r.failures.join(' | ')}` : ''))],
+      ['LivePhish', () => syncLivePhish(db, quickFetch).then((r) => `${r.tracks} tracks for ${r.shows.length} new show(s)${r.shows.length ? ' (' + r.shows.join(', ') + ')' : ''}` + (r.failures.length ? `; failures: ${r.failures.join(' | ')}` : ''))],
       // The table the pages read lengths from, from whatever the LivePhish
       // sync above wrote and the nightly phish.in sync left. Runs even when
       // a sync failed: the table then simply matches the tracks as they stand.

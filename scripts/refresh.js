@@ -13,6 +13,12 @@ const { syncBsky } = require('../lib/bsky');
 const { syncLivePhish } = require('../lib/livephish');
 const { syncPhishin } = require('../lib/phishin');
 const { loadApiKey } = require('../lib/apikey');
+const { withTimeout } = require('../lib/http');
+
+// Every outside call is bounded, since the job holds the database lock while
+// it runs (lib/http.js). phish.in's gateway can take a minute on a heavy page.
+const quickFetch = withTimeout(fetch, 30 * 1000);
+const phishinFetch = withTimeout(fetch, 90 * 1000);
 
 const ROOT = path.join(__dirname, '..');
 const DB_PATH = process.env.PHISH_DB_PATH || path.join(ROOT, 'data', 'phish.db');
@@ -24,7 +30,7 @@ async function main() {
   const log = createRunLog(LOG_DIR, { now: started });
   let db;
   try {
-    const client = createClient({ apiKey: loadApiKey() });
+    const client = createClient({ apiKey: loadApiKey(), fetchImpl: quickFetch });
     db = initDb(DB_PATH);
     log.info(`Refresh started (db: ${DB_PATH})`);
 
@@ -45,7 +51,7 @@ async function main() {
     // Song timings from the phish.com Bluesky posts. Secondary to the
     // phish.net pull: a failure here is logged but does not fail the run.
     try {
-      const bsky = await syncBsky(db, fetch);
+      const bsky = await syncBsky(db, quickFetch);
       log.info(`Bluesky posts: ${bsky.posts} song posts across ${bsky.shows.length} show(s)` +
         (bsky.shows.length ? ` (${bsky.shows[0]} .. ${bsky.shows[bsky.shows.length - 1]})` : '') +
         `, ${bsky.matched} matched to catalog songs, ${bsky.rematched} older rows re-matched, ${bsky.unmatched} still unmatched, since ${bsky.since || 'the beginning of the feed'}`);
@@ -63,7 +69,7 @@ async function main() {
 
     // Official track lengths from the LivePhish page each recap post links to.
     try {
-      const lp = await syncLivePhish(db, fetch);
+      const lp = await syncLivePhish(db, quickFetch);
       log.info(`LivePhish: ${lp.tracks} tracks for ${lp.shows.length} new show(s)` + (lp.failures.length ? `; failures: ${lp.failures.join(' | ')}` : ''));
     } catch (err) {
       log.error(`LivePhish sync failed (phish.net refresh above still succeeded): ${err && err.message ? err.message : err}`);
@@ -72,7 +78,7 @@ async function main() {
     // Recorded track lengths from phish.in. Same footing as Bluesky: logged
     // on failure, never fails the run. The first run pulls ~40 pages.
     try {
-      const pin = await syncPhishin(db, fetch, { now: started });
+      const pin = await syncPhishin(db, phishinFetch, { now: started });
       log.info(`phish.in tracks: ${pin.tracks} tracks across ${pin.shows.length} show(s)` +
         (pin.shows.length ? ` (${pin.shows[0]} .. ${pin.shows[pin.shows.length - 1]})` : '') +
         `, ${pin.matched} song links matched, ${pin.rematched} older re-matched, ${pin.unmatched} still unmatched, since ${pin.since || 'the beginning'}`);
