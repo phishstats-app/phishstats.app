@@ -298,7 +298,8 @@
       // The tour list is awaited with the rest so the tour card's title is
       // either a link or plain text once, never rewritten under the reader.
       // It is cached in app.js, so this costs one request per page load.
-      return Promise.all([api('season/shows', A), api('season/tops', A), review ? api('season/review', A) : null, review ? api('season/most-played', A) : null, P.loadTours().catch(function () { return null; })]).then(function (r) {
+      return Promise.all([api('season/shows', A), api('season/tops', A), review ? api('season/review', A) : null, review ? api('season/most-played', A) : null, P.loadTours().catch(function () { return null; }),
+        api('landing/scheduled', { d: localDate(null) }).catch(function () { return []; })]).then(function (r) {
         var shows = r[0], tops = r[1];
         tourIndex = r[4];
         if (!shows.length) { el.innerHTML = ''; return; }
@@ -314,9 +315,20 @@
         var tour = tourName ? shows.filter(function (s) { return s.tourname === tourName; }) : [];
         var yearSt = seasonStats(shows, tops), runSt = seasonStats(run, tops), tourSt = seasonStats(tour, tops);
         var span = function (rows) { return rows.length > 1 ? fmtDate(rows[0].showdate) + ' – ' + fmtDate(rows[rows.length - 1].showdate) : fmtDate(rows[0].showdate); };
+        // A run is still going when the venue has another date scheduled
+        // after the latest show (landing/scheduled is yesterday..tomorrow), so
+        // night 1 of a run already gets its card instead of waiting for two.
+        var upcoming = (r[5] || []).filter(function (s) { return s.showdate > last.showdate; });
+        var runOngoing = upcoming.some(function (s) { return Number(s.venueid) === Number(last.venueid); });
+        var showRun = run.length > 1 || runOngoing;
+        // The latest show's tour is the current tour from its first night. When
+        // its shows are exactly the run's (a tour that opens with this run),
+        // one card says both.
+        var tourIsRun = tour.length === run.length && run.every(function (s) { return s.tourname === tourName; });
+        var nights = function (k) { return n(k) + (k === 1 ? ' night' : ' nights'); };
         var cards = [];
-        if (run.length > 1) cards.push(seasonCard('This run', esc(last.venue) + ' · ' + n(run.length) + ' nights, ' + span(run), runSt, yearSt));
-        if (tour.length > 1 && tour.length !== shows.length) cards.push(seasonCard(tourTitle(tourName), n(tour.length) + ' shows, ' + span(tour) + (run.length > 1 && tour.length > run.length ? ' · run included' : ''), tourSt, yearSt));
+        if (showRun) cards.push(seasonCard('This run', esc(last.venue) + ' · ' + nights(run.length) + (runOngoing ? ' so far' : '') + ', ' + span(run) + (tourIsRun && tourName ? ' · opens ' + tourTitle(tourName) : ''), runSt, yearSt));
+        if (tour.length && tour.length !== shows.length && !(tourIsRun && showRun)) cards.push(seasonCard(tourTitle(tourName), n(tour.length) + (tour.length === 1 ? ' show' : ' shows') + ', ' + span(tour) + (showRun && tour.length > run.length ? ' · run included' : ''), tourSt, yearSt));
         var extra = [];
         if (review && r[2] && r[2][0]) {
           var rv = r[2][0];
