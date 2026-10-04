@@ -15,7 +15,7 @@ An unofficial, non-commercial fan project, not affiliated with or endorsed by Ph
 | Official song lengths | [LivePhish](https://www.livephish.com) release pages, read once per show | Running times only, always linked back to the release. |
 | Live setlists during a show | The public [Bluesky](https://bsky.app/profile/phish.com) posts of @phish.com | Song names and posting times only; post text is not reproduced. |
 
-Rights holders: takedown and correction requests to phishstats.perch752@simplelogin.fr. The full compliance statement is on the site's `/about` page and in `templates/pages/about.html`.
+Rights holders: takedown and correction requests go to the address on the site's [About page](https://phishstats.app/about#contact) (kept off this repository's text to spare it from address harvesters). The full compliance statement is there and in `templates/pages/about.html`.
 
 ## What is here
 

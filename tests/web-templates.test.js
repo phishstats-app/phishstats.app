@@ -46,7 +46,7 @@ test('the compliance file still says the things it must', () => {
   assert.match(compliance, /courtesy of <a href="https:\/\/phish\.net">Phish\.net<\/a>/);
   assert.match(compliance, /The Mockingbird Foundation/);
   assert.match(compliance, /phish\.com\/faq\/web-guidelines/);
-  assert.match(compliance, /phishstats\.perch752@simplelogin\.fr/);
+  assert.ok(compliance.includes(require('../lib/contact').ENCODED), 'the takedown address, encoded');
   assert.match(compliance, /No cookies, no accounts, no analytics/);
 });
 

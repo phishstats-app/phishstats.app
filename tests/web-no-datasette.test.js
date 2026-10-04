@@ -69,6 +69,6 @@ test('no page links to the canned queries', () => {
 test('the compliance footer survived the link removal intact', () => {
   const compliance = read('templates/_compliance.html');
   assert.match(compliance, /Setlist and song data courtesy of/);
-  assert.match(compliance, /phishstats\.perch752@simplelogin\.fr/);
+  assert.ok(compliance.includes(require('../lib/contact').ENCODED), 'the takedown address, encoded');
   assert.ok(!compliance.includes('All canned queries'), 'the link was never in this file');
 });

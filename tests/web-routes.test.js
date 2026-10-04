@@ -275,7 +275,7 @@ test('every page carries the compliance footer over the wire', async () => {
     for (const p of ['/song', '/show/2026-07-22', '/venue/1', '/city/other-city-os', '/about']) {
       const body = await (await get(base, p)).text();
       assert.match(body, /Phish\.net/, p);
-      assert.match(body, /phishstats\.perch752@simplelogin\.fr/, p);
+      assert.ok(body.includes(require('../lib/contact').ENCODED), p + ': the takedown address, encoded');
       assert.ok(!body.includes('{%'), p);
     }
   });
@@ -289,7 +289,7 @@ test('a tour page is served', async () => {
     assert.equal(res.headers.get('cache-control'), 'no-cache');
     const body = await res.text();
     assert.match(body, /^<!DOCTYPE html>/i);
-    assert.match(body, /phishstats\.perch752@simplelogin\.fr/); // compliance footer
+    assert.ok(body.includes(require('../lib/contact').ENCODED)); // compliance footer, address encoded
     assert.ok(!body.includes('{%'), 'template syntax survived');
   });
 });
@@ -310,7 +310,7 @@ test('a year page is served, and hiatus years are 404', async () => {
       const res = await get(base, p);
       assert.equal(res.status, 200, p);
       assert.equal(res.headers.get('cache-control'), 'no-cache');
-      assert.match(await res.text(), /phishstats\.perch752@simplelogin\.fr/);
+      assert.ok((await res.text()).includes(require('../lib/contact').ENCODED), 'the takedown address, encoded');
     }
     // Hiatus years, years outside the mirror, and nonsense.
     for (const p of ['/year/2001', '/year/2005', '/year/2008', '/year/1975',
