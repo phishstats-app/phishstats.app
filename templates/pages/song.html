@@ -43,6 +43,7 @@
 <script src="/assets/timezones.js"></script>
 <script src="/assets/app.js"></script>
 <script src="/assets/season-stats.js"></script>
+<script src="/assets/live-end.js"></script>
 <script src="/assets/landing.js"></script>
 <script>
 (function () {
@@ -135,6 +136,59 @@
   }
 
   var live = { entries: null, fetchedAt: null, error: null, official: {} };
+
+  // ---- set closers: when they end (assets/live-end.js) ------------------
+  // How long sets usually run, fetched once; until it arrives the built-in
+  // figures apply. Presses live in this browser only.
+  var LE = P.liveEnd, setLengthRows = null;
+  // A blocked localStorage (private window, blocked site data) still gets a
+  // working button for the life of the page: an in-memory stand-in.
+  var pressStore = (function () {
+    try { var s = window.localStorage; s.setItem('endset:probe', '1'); s.removeItem('endset:probe'); return s; } catch (e) {}
+    var mem = {};
+    return { getItem: function (k) { return k in mem ? mem[k] : null; }, setItem: function (k, v) { mem[k] = String(v); }, removeItem: function (k) { delete mem[k]; },
+      key: function (i) { return Object.keys(mem)[i]; }, get length() { return Object.keys(mem).length; } };
+  })();
+  if (LE) {
+    LE.prunePresses(pressStore, new Date(), LIVE_WINDOW_MS);
+    api('live/set-lengths').then(function (rows) { setLengthRows = rows; if (live.entries && live.entries.length) renderLive(); }).catch(function () {});
+  }
+  // The closer state of every set-ending entry: the last song of each set
+  // (and the song in progress), keyed by the entry.
+  function closerStates(entries, over) {
+    var out = new Map();
+    if (!LE) return out;
+    var setStart = {};
+    entries.forEach(function (e) { if (!setStart[e.set_label]) setStart[e.set_label] = e.set_started_at || e.posted_at; });
+    entries.forEach(function (e, i) {
+      var next = entries[i + 1];
+      if (next && next.set_label === e.set_label) return;
+      var s = catalogSong(e.song), L = s && liveFacts.lengths[s.id];
+      var win = LE.endWindow({ setStart: setStart[e.set_label], postedAt: e.posted_at, songMedianMs: L && L.n >= 5 ? L.median : null, figures: LE.setFigures(setLengthRows, e.set_label) });
+      var key = LE.storageKey(e, bskyKey(e.song));
+      var st = LE.closerState(e, { now: new Date(), window: win, press: LE.readPress(pressStore, key), nextSetStart: next ? (next.set_started_at || next.posted_at) : null, over: !next && over });
+      out.set(e, { state: st, window: win, key: key, figures: LE.setFigures(setLengthRows, e.set_label), setStart: setStart[e.set_label] });
+    });
+    return out;
+  }
+  // The line under a set closer: when the set usually ends, and the press,
+  // its confirmation and its undo. Buttons carry data-end (the action) and
+  // data-endkey; renderLive wires them.
+  function endControls(e, c, isLast, localTime) {
+    var st = c.state, w = c.window, f = c.figures;
+    var btn = function (act, label) { return '<button type="button" class="le-b" data-end="' + act + '" data-endkey="' + esc(c.key) + '">' + label + '</button>'; };
+    var at = function (secs) { return new Date(e.posted_at.getTime() + secs * 1000); };
+    if (st.earlyPress != null) {
+      var into = Math.round((at(st.earlyPress) - new Date(c.setStart)) / 60000);
+      return '<div class="le warn">Sets usually run ' + Math.round(f.p10 / 60) + '–' + Math.round(f.p90 / 60) + ' min; you pressed ' + into + ' min in ' +
+        btn('confirm', 'end anyway') + btn('undo', 'still playing') + '</div>';
+    }
+    var usual = 'set usually ends ' + esc(localTime(w.windowFrom, false)) + '–' + esc(localTime(w.windowTo, false));
+    if (st.kind === 'running') return '<div class="le">' + usual + btn('press', 'Set’s over') + '</div>';
+    if (st.kind === 'capped') return '<div class="le">clock stopped at ' + esc(localTime(w.capAt, false)) + ', past the usual end' + btn('press', 'Set’s over') + '</div>';
+    if (st.kind === 'pressed') return '<div class="le">you ended it at ' + esc(localTime(at(st.seconds), false)) + (isLast ? btn('undo', 'still playing?') : '') + '</div>';
+    return '';
+  }
 
   // ---- provisional notables from the live feed --------------------------
   // What tonight's songs might mean, judged from the catalog (gap, plays)
@@ -248,6 +302,7 @@
     if (!entries.length) { el.hidden = true; el.innerHTML = ''; return; }
     var last = entries[entries.length - 1];
     var over = !!last.show_ended_at;
+    var closers = closerStates(entries, over);
     // Attach official lengths to entries in setlist order.
     var queues = {};
     Object.keys(live.official).forEach(function (k) { queues[k] = live.official[k].slice(); });
@@ -257,11 +312,12 @@
     var nowHtml = '';
     if (mine.length) {
       var m = mine[mine.length - 1];
+      var mc = closers.get(m), ms = mc ? mc.state : null;
       if (m.official_seconds) {
         nowHtml = '<div class="l-now"><div class="k">' + esc(byId[currentId].name) + ' · tonight</div>' +
           '<div class="v">' + mmss(m.official_seconds * 1000) + '<small>LP</small></div>' +
           (m.approx_seconds ? '<div class="s">Post to post read ≈' + approxMin(m.approx_seconds) + ' BS.</div>' : '') + '</div>';
-      } else if (m === last && !over) {
+      } else if (ms ? ms.kind === 'running' : m === last && !over) {
         nowHtml = '<div class="l-now"><div class="k">' + esc(byId[currentId].name) + ' · playing now</div>' +
           '<div class="v hot"><span data-since="' + m.posted_at.toISOString() + '">' + clock(Date.now() - m.posted_at) + '</span><small>and counting</small></div>' +
           '<div class="s">Since the post at ' + m.posted_at.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) + '. Check back after the next song is posted for the post-to-post length.' +
@@ -269,8 +325,10 @@
             ? ' <b>' + (songLength.typicalMs ? 'Typical ' + mmss(songLength.typicalMs) : '') + (songLength.longest ? (songLength.typicalMs ? ' · ' : '') + 'longest ' + mmss(songLength.longest.rec_ms) + ' (' + fmtDate(songLength.longest.showdate) + ')' : '') + '</b>'
             : '') + '</div></div>';
       } else {
+        var k = m.approx_seconds ? null : ms && ms.kind;
         nowHtml = '<div class="l-now"><div class="k">' + esc(byId[currentId].name) + ' · tonight</div>' +
-          '<div class="v">' + (m.approx_seconds ? '≈' + approxMin(m.approx_seconds) : '–') + '<small>' + (m.approx_seconds ? 'BS, post to post' : over ? 'show over; LP length arrives with the LivePhish release' : 'set closer, next post came after the break') + '</small></div></div>';
+          '<div class="v">' + (m.approx_seconds ? '≈' + approxMin(m.approx_seconds) : k === 'pressed' ? '≈' + approxMin(ms.seconds) : k === 'capped' ? '≥' + clock(ms.seconds * 1000) : k === 'bounded' ? '≤' + approxMin(ms.seconds) : '–') +
+          '<small>' + (m.approx_seconds ? 'BS, post to post' : k === 'pressed' ? 'you ended it' : k === 'capped' ? 'past where sets usually end' : k === 'bounded' ? 'setbreak included' : over ? 'show over; LP length arrives with the LivePhish release' : 'set closer, next post came after the break') + '</small></div></div>';
       }
     }
     var tz = last.tz;
@@ -290,16 +348,26 @@
         var startedAt = e.set_started_at || e.posted_at;
         listHtml += '<li class="setmark"><span>' + esc(segName(e.set_label)) + '</span><span class="at" title="from the set post, on the venue clock">' + esc(localTime(startedAt, true)) + '</span></li>';
       }
-      var t;
+      var t, c = closers.get(e), st = c ? c.state : null, noteFor = e;
       if (e.official_seconds) t = '<span class="t official" title="official LivePhish length">' + mmss(e.official_seconds * 1000) + '<small>LP</small></span>';
-      else if (e === last && !over) t = '<span class="t playing" data-since="' + e.posted_at.toISOString() + '">' + clock(Date.now() - e.posted_at) + '</span>';
       else if (e.approx_seconds) t = '<span class="t" title="post to post from Bluesky">≈' + approxMin(e.approx_seconds) + '<small>BS</small></span>';
+      else if (st ? st.kind === 'running' : e === last && !over) t = '<span class="t playing" data-since="' + e.posted_at.toISOString() + '">' + clock(Date.now() - e.posted_at) + '</span>';
+      else if (st && st.kind === 'pressed') {
+        t = '<span class="t" title="from the post to when you pressed Set’s over">≈' + approxMin(st.seconds) + '<small>you</small></span>';
+        // A press inside the usual window is a length worth grading; an early one is not.
+        if (e.posted_at.getTime() + st.seconds * 1000 >= c.window.earlyBefore.getTime()) noteFor = Object.assign({}, e, { approx_seconds: st.seconds });
+      }
+      else if (st && st.kind === 'capped') t = '<span class="t capped" title="past where sets usually end, so the clock stopped; press Set’s over if you heard the end">≥' + clock(st.seconds * 1000) + '<small>setbreak?</small></span>';
+      else if (st && st.kind === 'bounded') t = '<span class="t" title="from this song’s post to the next set’s start, setbreak included">≤' + approxMin(st.seconds) + '<small>incl. break</small></span>';
       else t = '<span class="t br" title="' + (e === last && over ? 'show over; no next post to time against' : 'set closer') + '">—</span>';
-      var playing = e === last && !over && !e.official_seconds;
-      var note = liveNote(e, playing ? Date.now() - e.posted_at : 0);
+      var playing = st ? st.kind === 'running' && !e.official_seconds && e.approx_seconds == null : e === last && !over && !e.official_seconds;
+      var note = liveNote(noteFor, playing ? Date.now() - e.posted_at : 0);
+      var endHtml = c && !e.official_seconds && e.approx_seconds == null ? endControls(e, c, e === last, localTime) : '';
       if (note) alerts.push({ song: e.song, note: note, playing: playing });
       var cls = [curKey && bskyKey(e.song) === curKey ? 'current' : '', note ? 'n' + note.tier : ''].filter(Boolean).join(' ');
-      listHtml += '<li' + (cls ? ' class="' + cls + '"' : '') + (playing ? ' data-playing-since="' + e.posted_at.toISOString() + '" data-song="' + esc(e.song) + '"' : '') + '><button type="button" data-key="' + esc(bskyKey(e.song)) + '">' + esc(e.song) + '</button>' + t + noteHtml(note) + '</li>';
+      listHtml += '<li' + (cls ? ' class="' + cls + '"' : '') + (playing ? ' data-playing-since="' + e.posted_at.toISOString() + '" data-song="' + esc(e.song) + '"' : '') +
+        (playing && c ? ' data-cap="' + c.window.capAt.toISOString() + '"' : '') +
+        '><button type="button" data-key="' + esc(bskyKey(e.song)) + '">' + esc(e.song) + '</button>' + t + noteHtml(note) + endHtml + '</li>';
     });
     el.innerHTML =
       '<div class="l-head' + (over ? ' over' : '') + '"><span class="pulse"></span><span><b>' + (over ? 'Final' : 'Live') + '</b> · <a href="' + P.showPage(last.showdate) + '" title="show page">' + esc(last.showdate.slice(5).replace('-', '/')) + ' ' + esc(last.location) + '</a>' +
@@ -318,6 +386,15 @@
         : 'BS: post to post from <a href="https://bsky.app/profile/phish.com" target="_blank" rel="noopener">@phish.com</a>, so the current song reads as "at least". LP lengths replace them once the LivePhish release is posted.') +
         ' Notes under a song are judged from the catalog and every timed version on record; length-based ones stay provisional until the official times arrive. Tap a song to look it up.</div>';
     el.hidden = false;
+    el.querySelectorAll('button[data-end]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var key = btn.dataset.endkey, act = btn.dataset.end, cur = LE.readPress(pressStore, key);
+        if (act === 'press') LE.writePress(pressStore, key, { at: new Date(), confirmed: false });
+        else if (act === 'confirm' && cur) LE.writePress(pressStore, key, { at: cur.at, confirmed: true });
+        else if (act === 'undo') LE.clearPress(pressStore, key);
+        renderLive();
+      });
+    });
     el.querySelectorAll('button[data-key]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var hit = songs.filter(function (s) { return bskyKey(s.name) === btn.dataset.key; })[0];
@@ -329,6 +406,9 @@
   setInterval(function () {
     var now = Date.now();
     document.querySelectorAll('[data-since]').forEach(function (n) { n.textContent = clock(now - new Date(n.dataset.since)); });
+    // A closer whose clock reaches the cap stops: re-render into the capped state.
+    var capLi = document.querySelector('li[data-cap]');
+    if (capLi && now >= new Date(capLi.dataset.cap).getTime()) renderLive();
     // The song in progress crosses length milestones while the clock runs.
     if (++noteTick % 5 === 0) {
       var li = document.querySelector('li[data-playing-since]');

@@ -90,6 +90,7 @@ const EXPECTED_COLUMNS = {
   'landing/venue-info': ['prior_here'],
   'landing/shows-2y': ['n'],
   'landing/longshots': ['songid', 'song', 'artist', 'gap', 'times_played', 'last_played'],
+  'live/set-lengths': ['set_label', 'n', 'p10', 'p25', 'median', 'p75', 'p90'],
   'season/year': ['latest', 'remaining'],
   'season/review': ['distinct_songs', 'venues', 'cities'],
   'season/most-played': ['song', 'n'],

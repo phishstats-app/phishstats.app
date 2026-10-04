@@ -294,6 +294,12 @@
   .live li .ln { flex-basis: 100%; font-size: .78rem; line-height: 1.4; }
   .live li .ln .bo { color: var(--red); font-weight: 600; }
   .live li .ln i { font-style: normal; font-family: var(--mono); font-size: .66rem; letter-spacing: .04em; color: var(--ink-faint); margin-left: 4px; }
+  /* A set closer's end (assets/live-end.js): the usual window, the press and its undo. */
+  .live li .t.capped { color: var(--ink-faint); }
+  .live li .le { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: .78rem; color: var(--ink-dim); }
+  .live li .le.warn { color: var(--gold); }
+  .live li .le button.le-b { flex: none; overflow: visible; white-space: nowrap; font: inherit; color: var(--ink); padding: 2px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2); cursor: pointer; }
+  .live li .le button.le-b:hover { border-color: rgba(228,87,46,.6); }
   /* Three degrees of highlight: faint, notable, hot. Row tint plus note colour. */
   .live li.n1 { background: rgba(240,182,64,.05); }
   .live li.n2 { background: rgba(240,182,64,.11); }
