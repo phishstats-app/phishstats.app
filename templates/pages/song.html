@@ -96,6 +96,11 @@
   var ENCORE_PREFIX = /^ENCORE(?:\s*(\d))?\s*:\s*(.*)$/i;
   var NOT_A_SONG = /https?:\/\/|\n|available for download|phish radio|livestream|on sale|tickets|\.com\b|\bapp\b/i;
   var SET_WORDS = { one: '1', two: '2', three: '3', four: '4' };
+  // Late sets and sets the account names itself; the same rules as lib/bsky.js
+  // (CAPS_PREFIX, LATE_SET_GAP_MS, SHOW_OPEN_MS), held to the same cases by
+  // tests/bsky-late-set.test.js.
+  var CAPS_PREFIX = /^([A-Z][A-Z' ]{2,30}):\s*(.*)$/;
+  var LATE_SET_GAP_MS = 45 * 60 * 1000, SHOW_OPEN_MS = 12 * 3600 * 1000;
   function parseLiveFeed(posts) {
     var sorted = posts.slice().sort(function (a, b) { return new Date(a.createdAt) - new Date(b.createdAt); });
     var entries = [], show = null;
@@ -105,26 +110,38 @@
       if (header && !NOT_A_SONG.test(text)) {
         var year = header[3].length === 2 ? 2000 + Number(header[3]) : Number(header[3]);
         var tz = TZ ? TZ.venueTimeZone(TZ.parseLocation(header[4])) : null;
-        show = { showdate: year + '-' + String(header[1]).padStart(2, '0') + '-' + String(header[2]).padStart(2, '0'), location: header[4].trim(), tz: tz, set: '1', markerAt: null, started: {} };
+        show = { showdate: year + '-' + String(header[1]).padStart(2, '0') + '-' + String(header[2]).padStart(2, '0'), location: header[4].trim(), tz: tz, set: '1', setName: null, maxSet: 0, markerAt: null, started: {}, lastAt: null, ended: false };
         return;
       }
+      var at = new Date(p.createdAt).getTime();
+      if (show && show.lastAt !== null && at - show.lastAt > SHOW_OPEN_MS) show = null;
       if (!show) return;
-      var song = text, setLabel = show.set, set = SET_PREFIX.exec(text), enc = ENCORE_PREFIX.exec(text);
-      if (set) { setLabel = SET_WORDS[set[1].toLowerCase()] || set[1]; song = set[2].trim(); }
-      else if (enc) { setLabel = enc[1] && enc[1] !== '1' ? 'e' + enc[1] : 'e'; song = enc[2].trim(); }
+      var song = text, setLabel = show.set, name = show.setName, set = SET_PREFIX.exec(text), enc = ENCORE_PREFIX.exec(text);
+      var caps = set || enc ? null : CAPS_PREFIX.exec(text);
+      if (set) { setLabel = SET_WORDS[set[1].toLowerCase()] || set[1]; song = set[2].trim(); name = null; }
+      else if (enc) { setLabel = enc[1] && enc[1] !== '1' ? 'e' + enc[1] : 'e'; song = enc[2].trim(); name = null; }
+      else if (caps && !NOT_A_SONG.test(text)) { setLabel = String(show.maxSet + 1); song = caps[2].trim(); name = caps[1].trim().charAt(0) + caps[1].trim().slice(1).toLowerCase(); }
       else if (!text || text.length > 80 || NOT_A_SONG.test(text)) {
-        // The "now available" recap post is the show-over signal.
+        // The "now available" recap post is the show-over signal. It no longer
+        // closes the show, since a late set can follow it; other promos do.
         if (/available for download/i.test(text)) {
           entries.forEach(function (e) { if (e.showdate === show.showdate) e.show_ended_at = new Date(p.createdAt); });
+          show.ended = true; return;
         }
-        show = null; return;
+        if (!show.ended) show = null;
+        return;
       }
-      if (!song) { show.set = setLabel; show.markerAt = new Date(p.createdAt); return; }
+      else if (show.ended) return;   // after the recap only a set-prefixed post counts
+      else if (/^e/.test(show.set) && show.lastAt !== null && at - show.lastAt > LATE_SET_GAP_MS) { setLabel = String(show.maxSet + 1); name = null; }
+      if (/^\d+$/.test(setLabel)) show.maxSet = Math.max(show.maxSet, Number(setLabel));
+      show.lastAt = at;
+      if (show.ended) { show.ended = false; entries.forEach(function (e) { if (e.showdate === show.showdate) e.show_ended_at = null; }); }
+      if (!song) { show.set = setLabel; show.setName = name; show.markerAt = new Date(p.createdAt); return; }
       var setStartedAt = null;
       if (!show.started[setLabel]) { show.started[setLabel] = true; setStartedAt = show.markerAt || new Date(p.createdAt); }
       show.markerAt = null;
-      show.set = setLabel;
-      entries.push({ showdate: show.showdate, location: show.location, tz: show.tz, set_label: setLabel, song: song, posted_at: new Date(p.createdAt), next_posted_at: null, approx_seconds: null, closer: true, set_started_at: setStartedAt, show_ended_at: null });
+      show.set = setLabel; show.setName = name;
+      entries.push({ showdate: show.showdate, location: show.location, tz: show.tz, set_label: setLabel, set_name: name, song: song, posted_at: new Date(p.createdAt), next_posted_at: null, approx_seconds: null, closer: true, set_started_at: setStartedAt, show_ended_at: null });
     });
     for (var i = 0; i < entries.length; i++) {
       var cur = entries[i], next = entries[i + 1];
@@ -361,9 +378,10 @@
             : '') + '</div></div>';
       } else {
         var k = m.approx_seconds ? null : ms && ms.kind;
+        if (k === 'bounded' && /^e/.test(m.set_label)) k = 'late';   // before a late set: no bound worth showing
         nowHtml = '<div class="l-now"><div class="k">' + esc(byId[currentId].name) + ' · tonight</div>' +
           '<div class="v">' + (m.approx_seconds ? '≈' + approxMin(m.approx_seconds) : k === 'pressed' ? '≈' + approxMin(ms.seconds) : k === 'capped' ? '≥' + clock(ms.seconds * 1000) : k === 'bounded' ? '≤' + approxMin(ms.seconds) : '–') +
-          '<small>' + (m.approx_seconds ? 'BS, post to post' : k === 'pressed' ? 'you ended it' : k === 'capped' ? 'past where sets usually end' : k === 'bounded' ? 'setbreak included' : over ? 'show over; LP length arrives with the LivePhish release' : 'set closer, next post came after the break') + '</small></div></div>';
+          '<small>' + (m.approx_seconds ? 'BS, post to post' : k === 'pressed' ? 'you ended it' : k === 'capped' ? 'past where sets usually end' : k === 'bounded' ? 'setbreak included' : k === 'late' ? 'encore closer; the late set came later' : over ? 'show over; LP length arrives with the LivePhish release' : 'set closer, next post came after the break') + '</small></div></div>';
       }
     }
     var tz = last.tz;
@@ -374,14 +392,14 @@
     var starts = entries.filter(function (e) { return e.set_started_at; });
     var zoneLabel = tz && TZ ? TZ.formatLocalTime(last.posted_at.toISOString(), tz).split(' ').pop() : '';
     var timeline = starts.length ? '<div class="l-times">' + starts.map(function (e) {
-      return '<span><b>' + esc(segName(e.set_label)) + '</b> ' + esc(localTime(e.set_started_at, false)) + '</span>';
+      return '<span><b>' + esc(e.set_name || segName(e.set_label)) + '</b> ' + esc(localTime(e.set_started_at, false)) + '</span>';
     }).join('<i>·</i>') + (zoneLabel ? ' <small>' + esc(zoneLabel) + (tz ? '' : ', your clock') + '</small>' : '<small>your clock</small>') + '</div>' : '';
     var listHtml = '', lastSet = null, alerts = [];
     entries.forEach(function (e) {
       if (e.set_label !== lastSet) {
         lastSet = e.set_label;
         var startedAt = e.set_started_at || e.posted_at;
-        listHtml += '<li class="setmark"><span>' + esc(segName(e.set_label)) + '</span><span class="at" title="from the set post, on the venue clock">' + esc(localTime(startedAt, true)) + '</span></li>';
+        listHtml += '<li class="setmark"><span>' + esc(e.set_name || segName(e.set_label)) + '</span><span class="at" title="from the set post, on the venue clock">' + esc(localTime(startedAt, true)) + '</span></li>';
       }
       var t, c = closers.get(e), st = c ? c.state : null, noteFor = e;
       if (e.official_seconds) t = '<span class="t official" title="official LivePhish length">' + mmss(e.official_seconds * 1000) + '<small>LP</small></span>';
@@ -393,6 +411,9 @@
         if (e.posted_at.getTime() + st.seconds * 1000 >= c.window.earlyBefore.getTime()) noteFor = Object.assign({}, e, { approx_seconds: st.seconds });
       }
       else if (st && st.kind === 'capped') t = '<span class="t capped" title="past where sets usually end, so the clock stopped; press Set’s over if you heard the end">≥' + clock(st.seconds * 1000) + '<small>' + (/^e/.test(e.set_label) ? 'over?' : 'setbreak?') + '</small></span>';
+      // An encore closer followed by a late set (Mondegreen's Woodlands Jam came
+      // hours after the encore): a bound of hours says nothing, so say what it is.
+      else if (st && st.kind === 'bounded' && /^e/.test(e.set_label)) t = '<span class="t br" title="the encore ended some time before the late set began">—<small>before the late set</small></span>';
       else if (st && st.kind === 'bounded') t = '<span class="t" title="from this song’s post to the next set’s start, setbreak included">≤' + approxMin(st.seconds) + '<small>incl. break</small></span>';
       else t = '<span class="t br" title="' + (e === last && over ? 'show over; no next post to time against' : 'set closer') + '">—</span>';
       var playing = st ? st.kind === 'running' && !e.official_seconds && e.approx_seconds == null : e === last && !over && !e.official_seconds;
