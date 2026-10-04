@@ -43,7 +43,7 @@ test('every page carries the compliance text verbatim', () => {
 
 test('the compliance file still says the things it must', () => {
   // Not a style check: these are the specific commitments the site makes.
-  assert.match(compliance, /courtesy of <a href="https:\/\/phish\.net">Phish\.net<\/a>/);
+  assert.match(compliance, /courtesy of <a href="https:\/\/phish\.net"[^>]*>Phish\.net<\/a>/);
   assert.match(compliance, /The Mockingbird Foundation/);
   assert.match(compliance, /phish\.com\/faq\/web-guidelines/);
   assert.ok(compliance.includes(require('../lib/contact').ENCODED), 'the takedown address, encoded');

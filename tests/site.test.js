@@ -1,6 +1,6 @@
 'use strict';
 // The takedown address is never in plain text in anything served or
-// published: the pages carry it encoded and assets/contact.js assembles the
+// published: the pages carry it encoded and assets/site.js assembles the
 // mailto link in the browser. This file does not spell it out either; it
 // gets it from lib/contact.js.
 const test = require('node:test');
@@ -45,14 +45,14 @@ test('the footer and the About page carry the encoded address, and every page lo
     assert.ok(values.every((v) => v === ENCODED), f + ' carries the shared value');
   }
   for (const f of pages) {
-    assert.match(fs.readFileSync(f, 'utf8'), /<script src="\/assets\/contact\.js"/, path.relative(ROOT, f) + ' loads the decoder');
+    assert.match(fs.readFileSync(f, 'utf8'), /<script src="\/assets\/site\.js"/, path.relative(ROOT, f) + ' loads site.js');
   }
 });
 
 test('in the browser, the decoder turns each contact link into a working mailto', () => {
   const link = { attrs: { 'data-c': ENCODED }, href: '/about#contact', textContent: 'the address on the About page', getAttribute(n) { return this.attrs[n]; } };
-  const document = { readyState: 'complete', querySelectorAll: () => [link] };
-  vm.runInNewContext(fs.readFileSync(path.join(ROOT, 'assets', 'contact.js'), 'utf8'), { document, atob: (s) => Buffer.from(s, 'base64').toString('binary') });
+  const document = { readyState: 'complete', querySelectorAll: () => [link], addEventListener: () => {} };
+  vm.runInNewContext(fs.readFileSync(path.join(ROOT, 'assets', 'site.js'), 'utf8'), { document, location: { host: 'phishstats.app' }, atob: (s) => Buffer.from(s, 'base64').toString('binary') });
   assert.equal(link.href, 'mailto:' + ADDRESS);
   assert.equal(link.textContent, ADDRESS);
 });
@@ -60,4 +60,36 @@ test('in the browser, the decoder turns each contact link into a working mailto'
 test('the phish.in User-Agent still names the address, as agreed with phish.in', () => {
   const { USER_AGENT } = require('../lib/phishin');
   assert.ok(USER_AGENT.includes(ADDRESS));
+});
+
+// Links to other sites open in a new tab: written into the templates' static
+// links (so it holds without JavaScript), and applied by site.js to every
+// other link at click time, including the ones the pages build in script.
+test('every external link written in a template opens in a new tab', () => {
+  const files = walk(path.join(ROOT, 'templates')).filter((f) => f.endsWith('.html'));
+  const bad = [];
+  for (const f of files) {
+    for (const m of fs.readFileSync(f, 'utf8').matchAll(/<a [^>]*href="https?:\/\/[^"]+"[^>]*>/g)) {
+      if (!/target="_blank"/.test(m[0]) || !/rel="[^"]*noopener/.test(m[0])) bad.push(path.relative(ROOT, f) + ': ' + m[0]);
+    }
+  }
+  assert.deepEqual(bad, []);
+});
+
+test('site.js sends a click on a link to another site to a new tab, and leaves the rest alone', () => {
+  let onClick = null;
+  const document = { readyState: 'complete', querySelectorAll: () => [], addEventListener: (type, fn) => { if (type === 'click') onClick = fn; } };
+  vm.runInNewContext(fs.readFileSync(path.join(ROOT, 'assets', 'site.js'), 'utf8'), { document, location: { host: 'phishstats.app' }, atob: () => '' });
+  assert.equal(typeof onClick, 'function', 'a click handler is registered');
+  const link = (href) => {
+    const u = new URL(href, 'https://phishstats.app/song');
+    return { protocol: u.protocol, host: u.host, target: '', rel: '', closest() { return this; } };
+  };
+  const click = (a) => { onClick({ target: { closest: () => a } }); return a; };
+  const ext = click(link('https://github.com/phishstats-app/phishstats.app'));
+  assert.deepEqual([ext.target, ext.rel], ['_blank', 'noopener']);
+  assert.equal(click(link('/show/2026-10-03')).target, '', 'same site');
+  assert.equal(click(link('https://phishstats.app/about')).target, '', 'same site, absolute');
+  assert.equal(click(link('mailto:someone@example.invalid')).target, '', 'not a web page');
+  onClick({ target: { closest: () => null } }); // a click on no link at all
 });
