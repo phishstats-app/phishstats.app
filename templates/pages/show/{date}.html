@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#15121c">
-<title>Show · Phish.net local cache</title>
+<title>Show · Phish Stats App</title>
 <link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
 <link rel="icon" href="/assets/icon-32.png" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
@@ -273,7 +273,7 @@
 
   function render(core, rows, starts, history) {
     if (!core) { out.innerHTML = '<div class="state"><h1>No Phish show on ' + esc(longDate(DATE)) + '</h1><p>Try the date search for the nearest one.</p></div>'; return; }
-    document.title = fmtDate(core.showdate) + ' ' + core.venue + ' · Phish.net local cache';
+    document.title = fmtDate(core.showdate) + ' ' + core.venue + ' · Phish Stats App';
     P.crumbs([{ text: core.city + (core.state ? ', ' + core.state : ''), href: P.cityPage(core.city, core.state) }, { text: core.venue, href: P.venuePage(core.venueid) }, { text: fmtDate(core.showdate) }]);
     var items = notables(core, rows);
     var startBy = {}; starts.forEach(function (s) { startBy[s.set_label] = s.set_started_local; });

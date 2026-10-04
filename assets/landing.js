@@ -173,14 +173,14 @@
     // so far tonight (the live feed re-renders this on every post).
     var played = {};
     tonight.forEach(function (e) { played[P.songKey(e.song)] = true; });
-    function slotBlock(slot, title, actual, verb) {
+    // What the rate means is said once, under the cards, not in each slot.
+    function slotBlock(slot, title, actual) {
       if (actual) return '<div class="seg"><h3>' + esc(title) + '</h3><div class="call-result"><b>' + songLink(actual.song) + '</b></div></div>';
       var list = picks(d.cands[slot], played, d.shows2y);
       return '<div class="seg"><h3>' + esc(title) + '</h3>' + (list.length ? '<ol>' +
         list.map(function (c) {
           return '<li><span class="t">' + songLink(c.song) + '</span><span class="n">' + c.rate + '% · gap ' + n(c.gap) + '</span></li>';
-        }).join('') + '</ol>' : '') +
-        '<div class="none">rate = how often it ' + verb + ' over the last two years (' + n(d.shows2y) + ' shows)' + (started ? '; songs played tonight are left out' : '') + '</div></div>';
+        }).join('') + '</ol>' : '') + '</div>';
     }
     var set1Actual = tonight[0] || null;
     var set2Actual = tonight.filter(function (e) { return e.set_label === '2'; })[0] || null;
@@ -208,9 +208,10 @@
       (state.wx ? '<div class="subhead"><h3>Weather</h3></div>' + state.wx : '') +
       '<div class="subhead"><h3>Call-outs</h3><button type="button" class="sub-toggle" aria-expanded="' + !collapsed + '" aria-controls="callouts">' + (collapsed ? 'Show' : 'Hide') + '</button></div>' +
       '<div id="callouts"' + (collapsed ? ' hidden' : '') + '>' +
-      '<div class="segues">' + slotBlock('set1', 'Set 1 opener', set1Actual, 'opened set 1') + slotBlock('set2', 'Set 2 opener', set2Actual, 'opened set 2') +
-        slotBlock('encore', 'Encore opener', encoreActual, 'opened the encore') + longshotBlock() + '</div>' +
-      (!encoreActual ? '<div class="none" style="margin-top:8px">The lists reshuffle on each load, weighted toward the likely picks. Tap a song for its page.</div>' : '') +
+      '<div class="segues">' + slotBlock('set1', 'Set 1 opener', set1Actual) + slotBlock('set2', 'Set 2 opener', set2Actual) +
+        slotBlock('encore', 'Encore opener', encoreActual) + longshotBlock() + '</div>' +
+      (!encoreActual ? '<div class="none" style="margin-top:8px">The % is how often a song opened that slot over the last two years (' + n(d.shows2y) + ' shows)' +
+        (started ? '; songs played tonight are left out' : '') + '. The lists reshuffle on each load, weighted toward the likely picks. Tap a song for its page.</div>' : '') +
       '</div></section>';
     el.querySelector('.sub-toggle').addEventListener('click', function () {
       try { localStorage.setItem(CALLOUTS_KEY, collapsed ? '0' : '1'); } catch (e) {}

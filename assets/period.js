@@ -160,7 +160,7 @@
     // core.tourname is MIN(tourname) over the scope, which only means anything
     // for a tour: on era 1.0 it is "1983 Tour", the alphabetically first.
     var title = isTour ? (core.tourname || '') : (scope.label || '');
-    document.title = title + ' · Phish.net local cache';
+    document.title = title + ' · Phish Stats App';
     // Era › year › tour, the way the pages nest. A tour's parent is the year
     // it starts in, a year's is its era, and an era's is the index.
     var yearEra = era || (isYear ? eraOfYear(eras, scope.year) : null);
@@ -537,7 +537,7 @@
   function renderEras(out) {
     out.innerHTML = '<div class="state"><h1>Eras</h1><p>Counting…</p></div>';
     api('eras/index').then(function (eras) {
-      document.title = 'Eras · Phish.net local cache';
+      document.title = 'Eras · Phish Stats App';
       P.crumbs([{ text: 'Eras' }]);
       out.innerHTML = '<div class="title"><h1>Eras</h1>' +
         '<div class="by">Phish stopped twice. The gaps are where the eras divide.</div></div>' +

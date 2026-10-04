@@ -29,7 +29,7 @@
     if (!core || !core.shows) { out.innerHTML = '<div class="state"><h1>Nothing here</h1><p>No Phish shows on record for this place.</p></div>'; return; }
     var isVenue = scope.kind === 'venue';
     var name = isVenue ? core.venue : core.city + (core.state ? ', ' + core.state : '');
-    document.title = name + ' · Phish.net local cache';
+    document.title = name + ' · Phish Stats App';
     P.crumbs(isVenue ? [{ text: core.city + (core.state ? ', ' + core.state : ''), href: P.cityPage(core.city, core.state) }, { text: core.venue }] : [{ text: name }]);
 
     // Favorites: songs that come out here at 1.5x their usual rate, over 3+ plays.

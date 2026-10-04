@@ -303,7 +303,7 @@
   function renderBrowse(kind, out) {
     var name = (KINDS.filter(function (k) { return k[0] === kind; })[0] || [])[1];
     if (!name || !RENDER[kind]) { out.innerHTML = P.errorState(new Error('Nothing to browse here'), 'Not found'); return; }
-    document.title = name + ' · Phish.net local cache';
+    document.title = name + ' · Phish Stats App';
     P.crumbs([{ text: 'Eras', href: '/eras' }, { text: name }]);
     out.innerHTML = '<div class="state"><h1>' + esc(name) + '</h1><p>Gathering the list…</p></div>';
     RENDER[kind](out).then(function () {
