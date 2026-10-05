@@ -75,6 +75,16 @@
     return out;
   }
 
+  // How long the set ran by this visitor's press: set start to the press, in
+  // seconds. Only a counted press gives one; every other state is either still
+  // running, a bound that includes setbreak, or about to be replaced by the
+  // official lengths, so it returns null.
+  function pressedSetSeconds(setStart, entry, state) {
+    if (!state || state.kind !== 'pressed') return null;
+    var end = new Date(entry.posted_at).getTime() + state.seconds * 1000;
+    return Math.round((end - new Date(setStart).getTime()) / 1000);
+  }
+
   // ---- the press, kept in this browser --------------------------------------
   // Keyed by the song's post time as well as its name, so a song played twice
   // in a set is two keys. Storage can be missing or throw (private windows,
@@ -112,7 +122,7 @@
   }
 
   return {
-    DEFAULTS: DEFAULTS, setFigures: setFigures, endWindow: endWindow, closerState: closerState,
+    DEFAULTS: DEFAULTS, setFigures: setFigures, endWindow: endWindow, closerState: closerState, pressedSetSeconds: pressedSetSeconds,
     storageKey: storageKey, readPress: readPress, writePress: writePress, clearPress: clearPress, prunePresses: prunePresses,
   };
 });

@@ -67,6 +67,19 @@ test('a later post in the same set overrides a press, and an official length ove
   assert.deepEqual(state(95, { press, entry: { approx_seconds: 900, official_seconds: 1000 } }), { kind: 'official', seconds: 1000 });
 });
 
+test('a press gives the set a length, from its start to the press, and nothing else does', () => {
+  const entry = { posted_at: at(72) };
+  const pressed = state(95, { press: { at: at(88) } });
+  assert.equal(L.pressedSetSeconds(S, entry, pressed), 88 * 60);
+  assert.equal(L.pressedSetSeconds(S, { posted_at: at(45) }, state(95, { press: { at: at(52), confirmed: true }, entry: { posted_at: at(45) } })), 52 * 60, 'a confirmed early press counts');
+  assert.equal(L.pressedSetSeconds(S, entry, state(60, { press: { at: at(52) } })), null, 'an unconfirmed early press does not');
+  for (const s of [state(80), state(120), state(95, { over: true }), state(150, { nextSetStart: at(125) }),
+    state(95, { press: { at: at(88) }, entry: { approx_seconds: 900 } }), state(95, { press: { at: at(88) }, entry: { official_seconds: 1000 } })]) {
+    assert.equal(L.pressedSetSeconds(S, entry, s), null, s.kind + ' is not a press');
+  }
+  assert.equal(L.pressedSetSeconds(S, entry, null), null);
+});
+
 test('a show that is over stops the clock without a press', () => {
   assert.deepEqual(state(95, { over: true }), { kind: 'over', seconds: null });
 });

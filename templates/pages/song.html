@@ -393,12 +393,25 @@
     var timeline = starts.length ? '<div class="l-times">' + starts.map(function (e) {
       return '<span><b>' + esc(e.set_name || segName(e.set_label)) + '</b> ' + esc(localTime(e.set_started_at, false)) + '</span>';
     }).join('<i>·</i>') + (zoneLabel ? ' <small>' + esc(zoneLabel) + (tz ? '' : ', your clock') + '</small>' : '<small>your clock</small>') + '</div>' : '';
+    // A set this visitor ended with Set's over gets a length on its header
+    // row, start to press, until the closer's LivePhish length replaces the
+    // press (closerState goes official and this drops out).
+    // Written like the show page's official set lengths (1:28), to the
+    // minute, with the minutes alongside; an encore under an hour stays "16 min".
+    function setLen(secs) {
+      var m = Math.round(secs / 60);
+      return m < 60 ? m + ' min' : Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0') + ' (' + m + ' min)';
+    }
+    var setSecs = {};
+    closers.forEach(function (c, e) { var s = LE.pressedSetSeconds(c.setStart, e, c.state); if (s != null) setSecs[e.set_label] = s; });
     var listHtml = '', lastSet = null, alerts = [];
     entries.forEach(function (e) {
       if (e.set_label !== lastSet) {
         lastSet = e.set_label;
         var startedAt = e.set_started_at || e.posted_at;
-        listHtml += '<li class="setmark"><span>' + esc(e.set_name || segName(e.set_label)) + '</span><span class="at" title="from the set post, on the venue clock">' + esc(localTime(startedAt, true)) + '</span></li>';
+        listHtml += '<li class="setmark"><span>' + esc(e.set_name || segName(e.set_label)) +
+          (setSecs[e.set_label] != null ? ' <span class="len" title="from the set’s start to when you pressed Set’s over; provisional until the LivePhish lengths arrive">≈' + setLen(setSecs[e.set_label]) + '<small>you</small></span>' : '') +
+          '</span><span class="at" title="from the set post, on the venue clock">' + esc(localTime(startedAt, true)) + '</span></li>';
       }
       var t, c = closers.get(e), st = c ? c.state : null, noteFor = e;
       if (e.official_seconds) t = '<span class="t official" title="official LivePhish length">' + mmss(e.official_seconds * 1000) + '<small>LP</small></span>';
