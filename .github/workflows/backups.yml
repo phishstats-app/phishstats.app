@@ -1,0 +1,84 @@
+name: Backups
+
+# Keeps the servers' OCI boot-volume backups inside the tenancy's five slots.
+# The backup policy runs Mondays at 13:00 UTC and each server keeps two
+# backups; before the run, scripts/rotate-backups.js deletes all but each
+# server's newest, so the run always has room. Sunday 13:17 UTC is the slot;
+# Monday 07:17 UTC is a retry in case GitHub delays or drops a scheduled run
+# (both are no-ops once the rotation is done). A manual run defaults to a dry
+# run, which lists what it would delete and deletes nothing.
+on:
+  schedule:
+    - cron: '17 13 * * 0'
+    - cron: '17 7 * * 1'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'List what would be deleted, delete nothing'
+        type: boolean
+        default: true
+
+# Actions are pinned to full commit SHAs (the version is the comment beside
+# each); Dependabot keeps them current. The default token can only read.
+permissions:
+  contents: read
+
+concurrency:
+  group: backups
+  cancel-in-progress: false
+
+jobs:
+  rotate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # The OCI credentials are secrets of this environment, which only main
+    # may use. They belong to a user that can list and delete boot-volume
+    # backups and do nothing else.
+    environment: oci-backups
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+      - name: Test the rotation
+        run: node --test tests/rotate-backups.test.js
+      - name: Install the OCI CLI
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet oci-cli==3.94.2
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+      - name: Write the OCI config
+        env:
+          OCI_USER: ${{ secrets.OCI_USER }}
+          OCI_TENANCY: ${{ secrets.OCI_TENANCY }}
+          OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
+          OCI_KEY: ${{ secrets.OCI_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s\n' "$OCI_KEY" > "$RUNNER_TEMP/oci.pem"
+          {
+            echo '[DEFAULT]'
+            echo "user=$OCI_USER"
+            echo "tenancy=$OCI_TENANCY"
+            echo "fingerprint=$OCI_FINGERPRINT"
+            echo "key_file=$RUNNER_TEMP/oci.pem"
+            echo 'region=us-sanjose-1'
+          } > "$RUNNER_TEMP/oci.cfg"
+      - name: Rotate
+        env:
+          COMPARTMENT: ${{ secrets.OCI_COMPARTMENT }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+          SUPPRESS_LABEL_WARNING: 'True'
+          OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING: 'True'
+        run: |
+          set -uo pipefail
+          args=(--compartment-id "$COMPARTMENT" --config-file "$RUNNER_TEMP/oci.cfg" --servers 2)
+          if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
+          node scripts/rotate-backups.js "${args[@]}" | tee -a "$GITHUB_STEP_SUMMARY"
+          exit "${PIPESTATUS[0]}"
+      - name: Remove the key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/oci.pem" "$RUNNER_TEMP/oci.cfg"
