@@ -72,6 +72,7 @@
         '<div class="eyebrow">' + (isVenue ? 'Venue' : 'City · ' + n(core.venues) + (core.venues === 1 ? ' venue' : ' venues')) + ' · ' + n(core.shows) + ' Phish shows, ' + P.yearOf(core.first_show) + ' to ' + P.yearOf(core.last_show) + '</div>' +
         '<h1>' + esc(name) + '</h1>' +
         (isVenue ? '<div class="by"><a href="' + P.cityPage(core.city, core.state) + '">' + esc(core.city + (core.state ? ', ' + core.state : '')) + '</a></div>' : '') +
+        '<div class="links">' + P.shareHtml() + '</div>' +
       '</header>' +
       P.badgesHtml(badges) +
       '<div class="lead">' +

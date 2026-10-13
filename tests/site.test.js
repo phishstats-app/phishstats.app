@@ -78,7 +78,7 @@ test('every external link written in a template opens in a new tab', () => {
 
 test('site.js sends a click on a link to another site to a new tab, and leaves the rest alone', () => {
   let onClick = null;
-  const document = { readyState: 'complete', querySelectorAll: () => [], addEventListener: (type, fn) => { if (type === 'click') onClick = fn; } };
+  const document = { readyState: 'complete', querySelectorAll: () => [], addEventListener: (type, fn, capture) => { if (type === 'click' && capture) onClick = fn; } };
   vm.runInNewContext(fs.readFileSync(path.join(ROOT, 'assets', 'site.js'), 'utf8'), { document, location: { host: 'phishstats.app' }, atob: () => '' });
   assert.equal(typeof onClick, 'function', 'a click handler is registered');
   const link = (href) => {
@@ -92,4 +92,48 @@ test('site.js sends a click on a link to another site to a new tab, and leaves t
   assert.equal(click(link('https://phishstats.app/about')).target, '', 'same site, absolute');
   assert.equal(click(link('mailto:someone@example.invalid')).target, '', 'not a web page');
   onClick({ target: { closest: () => null } }); // a click on no link at all
+});
+
+// The "Copy link" button: copies the page's address without its #anchor, or
+// opens the share sheet on a phone.
+function shareHarness({ coarse = false, share = null } = {}) {
+  let onClick = null;
+  const copied = [];
+  const shared = [];
+  const timers = [];
+  const document = { readyState: 'complete', title: 'Fluffhead · Phish Stats App', querySelectorAll: () => [],
+    addEventListener: (type, fn, capture) => { if (type === 'click' && !capture) onClick = fn; } };
+  const navigator = { clipboard: { writeText: (t) => { copied.push(t); return Promise.resolve(); } } };
+  if (share) navigator.share = (d) => { shared.push(d); return share(d); };
+  const window = { matchMedia: (q) => ({ matches: coarse && q === '(pointer: coarse)' }) };
+  const location = { host: 'phishstats.app', origin: 'https://phishstats.app', pathname: '/song', search: '?song=Fluffhead', hash: '#longest-ever' };
+  vm.runInNewContext(fs.readFileSync(path.join(ROOT, 'assets', 'site.js'), 'utf8'),
+    { document, navigator, window, location, atob: () => '', Promise, setTimeout: (fn) => timers.push(fn), clearTimeout: () => {} });
+  const btn = { textContent: 'Copy link', attrs: {}, getAttribute(n) { return this.attrs[n] ?? null; }, setAttribute(n, v) { this.attrs[n] = v; } };
+  const click = async (target) => { onClick({ target: { closest: (sel) => (sel === 'button.js-share' ? target : null) } }); await new Promise((r) => setImmediate(r)); };
+  return { onClick: () => onClick, copied, shared, timers, btn, click };
+}
+
+test('Copy link copies the page address with its query and without its anchor, then says so', async () => {
+  const h = shareHarness();
+  assert.equal(typeof h.onClick(), 'function');
+  await h.click(h.btn);
+  assert.deepEqual(h.copied, ['https://phishstats.app/song?song=Fluffhead']);
+  assert.equal(h.btn.textContent, 'Copied');
+  h.timers.forEach((fn) => fn());
+  assert.equal(h.btn.textContent, 'Copy link', 'the label comes back');
+  await h.click(null); // a click on anything else does nothing
+  assert.equal(h.copied.length, 1);
+});
+
+test('on a phone the button opens the share sheet, and closing it copies nothing', async () => {
+  const cancel = () => Promise.reject(Object.assign(new Error('cancelled'), { name: 'AbortError' }));
+  const h = shareHarness({ coarse: true, share: cancel });
+  await h.click(h.btn);
+  assert.deepEqual(h.shared.map((d) => ({ ...d })), [{ title: 'Fluffhead · Phish Stats App', url: 'https://phishstats.app/song?song=Fluffhead' }]);
+  assert.deepEqual(h.copied, []);
+  const desk = shareHarness({ coarse: false, share: () => Promise.resolve() });
+  await desk.click(desk.btn);
+  assert.deepEqual(desk.shared, [], 'a desktop browser with a share sheet still copies');
+  assert.equal(desk.copied.length, 1);
 });

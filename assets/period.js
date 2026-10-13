@@ -191,6 +191,7 @@
       '<div class="title"><h1>' + esc(title) + '</h1>' +
       '<div class="by">' + esc(span) + ' · ' + n(core.shows) + ' shows · ' +
       n(core.venues) + ' venues in ' + n(core.cities) + ' cities</div>' +
+      '<div class="links">' + P.shareHtml() + '</div>' +
       P.badgesHtml(badges) + '</div>' +
       (isYear ? yearStrip(scope.year, eras, yearEra, eraYears) : '') +
       // An era leads with links to everything below, under "Notable", then

@@ -759,6 +759,7 @@
         '<div class="eyebrow">' + (core.rank <= core.ranked_of ? '#' + n(core.rank) + ' most played of ' + n(core.ranked_of) : 'Song') + '</div>' +
         '<h1><a href="' + esc(songUrl(core.slug)) + '" target="_blank" rel="noopener">' + esc(core.song) + '</a></h1>' +
         (core.artist && core.artist !== 'Phish' ? '<div class="by">originally by <b>' + esc(core.artist) + '</b></div>' : '') +
+        '<div class="links">' + P.shareHtml() + '</div>' +
       '</header>' +
       (b.length ? '<div class="badges">' + b.map(function (x) {
         return '<span class="badge ' + x.cls + '"><span class="dot"></span>' + esc(x.text) + (x.sub ? ' <small>' + esc(x.sub) + '</small>' : '') + '</span>';

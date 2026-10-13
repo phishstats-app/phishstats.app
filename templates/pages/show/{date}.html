@@ -16,9 +16,6 @@
   .nav { display: flex; justify-content: space-between; gap: 8px; margin-top: 14px; font-size: .84rem; }
   .nav a { color: var(--ink-dim); padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
   .nav a:hover { color: var(--ink); border-color: var(--ink-dim); }
-  .title .links { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .82rem; }
-  .title .links a { color: var(--ink-dim); border-bottom: 1px solid var(--line); }
-  .title .links a:hover { color: var(--ink); }
   .title .by a { color: var(--ink); font-weight: 500; }
   .title .by a:hover { color: var(--blue); }
 
@@ -295,7 +292,7 @@
           ' · Phish’s ' + P.ordinal(core.venue_nth) + ' show here · show #' + n(core.show_nth) + ' overall</div>' +
         '<div class="links"><a href="' + esc(core.permalink) + '" target="_blank" rel="noopener">phish.net setlist</a>' +
           (core.phishin_tracks ? '<a href="https://phish.in/' + esc(core.showdate) + '" target="_blank" rel="noopener">listen on phish.in</a>' : '') +
-          (P.livePhishUrl(core.showdate, core.livephish_url) ? '<a href="' + esc(P.livePhishUrl(core.showdate, core.livephish_url)) + '" target="_blank" rel="noopener">official on LivePhish</a>' : '') + '</div>' +
+          (P.livePhishUrl(core.showdate, core.livephish_url) ? '<a href="' + esc(P.livePhishUrl(core.showdate, core.livephish_url)) + '" target="_blank" rel="noopener">official on LivePhish</a>' : '') + P.shareHtml() + '</div>' +
       '</header>' +
 
       '<div class="lead">' +

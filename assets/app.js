@@ -253,6 +253,12 @@
                     : '<span class="badge ' + (x.cls || '') + '"><span class="dot"></span>' + inner + '</span>';
     }).join('') + '</div>';
   }
+  // The share button for a page's title; assets/site.js does the work. A
+  // phone gets the system share sheet, so it says "Share" there.
+  function shareHtml() {
+    var sheet = !!(navigator.share && window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+    return '<button type="button" class="share js-share" aria-live="polite">' + (sheet ? 'Share' : 'Copy link') + '</button>';
+  }
   function stat(v, k, small) { return '<div class="stat"><div class="v">' + v + (small ? '<small>' + esc(small) + '</small>' : '') + '</div><div class="k">' + esc(k) + '</div></div>'; }
   // Breadcrumbs in the top bar: [{ text, href }] after Home; the last item is
   // the current page and gets no link.
@@ -321,6 +327,6 @@
     api: api, esc: esc, n: n, pct: pct, yearOf: yearOf, fmtDate: fmtDate, longDate: longDate, fullDate: fullDate, shortMonth: shortMonth,
     yearsBetween: yearsBetween, mmss: mmss, hmmss: hmmss, approxMin: approxMin, ordinal: ordinal, songUrl: songUrl, songPage: songPage, livePhishUrl: livePhishUrl, showPage: showPage,
     venuePage: venuePage, cityPage: cityPage, citySlug: citySlug, recTag: recTag, isCover: isCover, slotName: slotName, safeNote: safeNote, songKey: songKey,
-    loadCatalog: loadCatalog, loadTours: loadTours, tourLink: tourLink, parseDate: parseDate, mountSearch: mountSearch, badgesHtml: badgesHtml, stat: stat, errorState: errorState, gapBadge: gapBadge, crumbs: crumbs,
+    loadCatalog: loadCatalog, loadTours: loadTours, tourLink: tourLink, parseDate: parseDate, mountSearch: mountSearch, badgesHtml: badgesHtml, shareHtml: shareHtml, stat: stat, errorState: errorState, gapBadge: gapBadge, crumbs: crumbs,
   };
 })();
