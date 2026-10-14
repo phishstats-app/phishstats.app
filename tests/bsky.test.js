@@ -150,6 +150,57 @@ test('fetchFeedSince pages backwards until it passes the cutoff', async () => {
   assert.equal(posts[0].text, 'Today at Noon ET/9AM PT, Phish Radio has last night\'s full replay');
 });
 
+test('the feed comes from public.api.bsky.app while it answers', async () => {
+  const hosts = [];
+  const fetchImpl = async (url) => { hosts.push(new URL(url).host); return { ok: true, json: async () => ({ feed: [wrap(DICKS[0])] }) }; };
+  const { fetchFeed } = require('../lib/bsky');
+  const got = await fetchFeed(fetchImpl, { actor: 'phish.com' });
+  assert.deepEqual(hosts, ['public.api.bsky.app']);
+  assert.equal(got.host, 'public.api.bsky.app');
+  assert.equal(got.posts.length, 1);
+});
+
+test('a hung public.api.bsky.app falls back to api.bsky.app, which serves the rest of the pages', async () => {
+  // 2026-10-14: the BunnyCDN edge in front of public.api.bsky.app took the
+  // TLS handshake and never answered; api.bsky.app answered in 0.1 s.
+  const pages = {
+    null: { feed: [DICKS[12], DICKS[11]].map(wrap), cursor: 'c1' },
+    c1: { feed: [DICKS[10]].map(wrap) },
+  };
+  const requested = [];
+  const fetchImpl = async (url) => {
+    const u = new URL(url);
+    requested.push(`${u.host} ${u.searchParams.get('cursor')}`);
+    if (u.host === 'public.api.bsky.app') throw new Error('public.api.bsky.app did not answer within 30 s');
+    return { ok: true, json: async () => pages[String(u.searchParams.get('cursor'))] };
+  };
+  const { fetchFeed } = require('../lib/bsky');
+  const got = await fetchFeed(fetchImpl, { actor: 'phish.com' });
+  assert.deepEqual(requested, ['public.api.bsky.app null', 'api.bsky.app null', 'api.bsky.app c1']);
+  assert.equal(got.host, 'api.bsky.app');
+  assert.equal(got.posts.length, 3);
+});
+
+test('an error status from the first host falls back too', async () => {
+  const fetchImpl = async (url) => new URL(url).host === 'public.api.bsky.app'
+    ? { ok: false, status: 502, json: async () => ({}) }
+    : { ok: true, json: async () => ({ feed: [wrap(DICKS[0])] }) };
+  const db = initDb(':memory:');
+  const r = await syncBsky(db, fetchImpl, { since: null });
+  assert.equal(r.host, 'api.bsky.app');
+  db.close();
+});
+
+test('when no host answers the sync fails, naming every try', async () => {
+  const fetchImpl = async (url) => {
+    const host = new URL(url).host;
+    if (host === 'public.api.bsky.app') throw new Error('public.api.bsky.app did not answer within 30 s');
+    return { ok: false, status: 503, json: async () => ({}) };
+  };
+  await assert.rejects(fetchFeedSince(fetchImpl, { actor: 'phish.com' }),
+    /Bluesky feed request failed: public\.api\.bsky\.app did not answer within 30 s; api\.bsky\.app answered 503/);
+});
+
 test('a post is timed from the earlier of its own stamp and when Bluesky received it', async () => {
   // phish.com's posts carry a createdAt about 16 s in the future (every
   // setlist post on 2026-10-03 was indexed 15-16 s before its own stamp).

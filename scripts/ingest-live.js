@@ -43,7 +43,7 @@ async function main() {
 
     const steps = [
       ['Scheduled shows', () => syncScheduledShows(db, createClient({ apiKey: loadApiKey(), fetchImpl: quickFetch }), { now: started }).then((r) => `${r.total} dates, ${r.upcoming.length} upcoming` + (r.upcoming[0] ? ` (next ${r.upcoming[0].showdate} ${r.upcoming[0].venue})` : ''))],
-      ['Bluesky', () => syncBsky(db, quickFetch).then((r) => `${r.posts} song posts, ${r.shows.length} show(s), ${r.unmatched} unmatched`)],
+      ['Bluesky', () => syncBsky(db, quickFetch).then((r) => `${r.posts} song posts, ${r.shows.length} show(s), ${r.unmatched} unmatched` + (r.host !== 'public.api.bsky.app' ? ` (via ${r.host})` : ''))],
       // After Bluesky, which is where the "now available" recap arrives.
       ['Recapped shows', () => syncRecappedShows(db, createClient({ apiKey: loadApiKey(), fetchImpl: quickFetch }), { now: started }).then((r) =>
         r.added.length ? `stored ${r.added.join(', ')} from phish.net` : r.waiting.length ? `waiting: ${r.waiting.join(' | ')}` : 'none pending')],
