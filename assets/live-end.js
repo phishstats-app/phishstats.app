@@ -121,7 +121,20 @@
     } catch (e) {}
   }
 
+  // The gap a song played tonight is ending. The catalog's gap is the shows
+  // since the last play, going into tonight; phish.net's setlist counts
+  // tonight's show as well (Your Pet Cat, 2026-10-09: 99 going in, a 100-show
+  // gap on the setlist). Null when there is no show, no catalog gap, or the
+  // catalog already has tonight as the last play (the show is on file and the
+  // song's gap is back to 0).
+  function gapTonight(gap, lastPlayed, showdate) {
+    if (!showdate || gap == null || gap === '' || isNaN(Number(gap))) return null;
+    if (lastPlayed && String(lastPlayed) >= String(showdate)) return null;
+    return Number(gap) + 1;
+  }
+
   return {
+    gapTonight: gapTonight,
     DEFAULTS: DEFAULTS, setFigures: setFigures, endWindow: endWindow, closerState: closerState, pressedSetSeconds: pressedSetSeconds,
     storageKey: storageKey, readPress: readPress, writePress: writePress, clearPress: clearPress, prunePresses: prunePresses,
   };

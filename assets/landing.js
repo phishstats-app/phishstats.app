@@ -115,7 +115,7 @@
     return '<div class="wx"><div class="wx-line">' + line + ' <a href="' + esc(link) + '" target="_blank" rel="noopener">Full forecast</a></div><div class="wx-strip">' +
       rows.map(function (r) {
         var w = wmo(r.code);
-        return '<div class="wx-h' + (r.pop >= 50 ? ' wet' : '') + '" title="' + esc(w.text) + '"><div class="t">' + (r.hour % 12 || 12) + (r.hour >= 12 ? 'p' : 'a') + '</div><div class="i">' + w.icon + '</div><div class="d">' + Math.round(r.temp) + deg + '</div><div class="p">' + (r.pop || 0) + '%</div><div class="w">' + Math.round(r.wind) + '</div></div>';
+        return '<div class="wx-h' + (r.pop >= 50 ? ' wet' : '') + '" title="' + esc(w.text) + '"><div class="t">' + (r.hour % 12 || 12) + (r.hour >= 12 ? 'p' : 'a') + '</div><div class="i">' + w.icon + '</div><div class="d">' + Math.round(r.temp) + deg + '</div><div class="p">' + (Number(r.pop) || 0) + '%</div><div class="w">' + Math.round(r.wind) + '</div></div>';
       }).join('') + '</div><div class="none">hour · sky · temp · rain chance · wind ' + spd + ' at ' + esc(geo.name) + ', via Open-Meteo</div></div>';
   }
   function loadWeather(show) {
@@ -195,8 +195,10 @@
       return '<div class="seg"><h3>Long shots</h3><ol>' +
         d.longshots.map(function (c) {
           var hit = played[P.songKey(c.song)];
-          return '<li' + (hit ? ' class="hit"' : '') + '><span class="t">' + songLink(c.song) + (P.isCover(c.artist) ? '<span class="cover">' + esc(c.artist) + '</span>' : '') + '</span>' +
-            '<span class="n">' + (hit ? '<b>played tonight</b> · ' : '') + 'gap ' + n(c.gap) + ' · last ' + fmtDate(c.last_played) + '</span></li>';
+          // A played one ended its gap tonight, and that gap counts tonight's show.
+          var ended = hit && P.liveEnd ? P.liveEnd.gapTonight(c.gap, c.last_played, show.showdate) : null;
+          return'<li' + (hit ? ' class="hit"' : '') + '><span class="t">' + songLink(c.song) + (P.isCover(c.artist) ? '<span class="cover">' + esc(c.artist) + '</span>' : '') + '</span>' +
+            '<span class="n">' + (hit ? '<b>played tonight</b> · ' : '') + 'gap ' + n(ended != null ? ended : c.gap) + ' · last ' + fmtDate(c.last_played) + '</span></li>';
         }).join('') + '</ol><div class="none">not played in 300+ shows, just for fun</div></div>';
     }
 

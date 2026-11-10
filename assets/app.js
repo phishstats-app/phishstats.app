@@ -72,9 +72,13 @@
   }
 
   // phish.net embeds a little HTML in notes; keep only harmless inline tags.
+  // Parsed inside a <template>: its content is inert, so nothing in the note
+  // loads or runs while it is being cleaned (an <img onerror> in a plain div
+  // would fire at parse time, before the removal below).
   function safeNote(html) {
-    var t = document.createElement('div');
-    t.innerHTML = String(html || '');
+    var holder = document.createElement('template');
+    holder.innerHTML = String(html || '');
+    var t = holder.content;
     t.querySelectorAll('script,style,iframe,object,embed,img').forEach(function (e) { e.remove(); });
     t.querySelectorAll('*').forEach(function (e) {
       if (!/^(A|B|I|EM|STRONG|SPAN|P|BR)$/.test(e.tagName)) { e.replaceWith(document.createTextNode(e.textContent)); return; }
@@ -83,7 +87,7 @@
         e.removeAttribute(a.name);
       });
     });
-    return t.innerHTML;
+    return holder.innerHTML;
   }
 
   // ---- song name matching ---------------------------------------------------

@@ -35,7 +35,7 @@
 
   <p class="foot-note">
     {% include "_compliance.html" %}
-    <br>Tonight's show lands with the next morning's refresh, so treat these as the numbers going into the show.
+    <br>Tonight's show joins the stats within about an hour of its end. Until then these are the numbers going into the show, except that a song played tonight shows the gap it ended, counting tonight as phish.net does.
     
   </p>
 </div>
@@ -252,7 +252,10 @@
     var s = catalogSong(e.song);
     if (!s) return { tier: 3, text: 'not in the phish.net catalog: a debut, or a cover not listed yet', prov: true, brief: 'possible debut' };
     var parts = [], tier = 0, brief = '', f = liveFacts.songs[s.id];
-    if (f && Number(f.gap) >= 50) { parts.push('<b class="bo">bustout</b> first since ' + fmtDate(f.last_played) + ', ' + n(f.gap) + '-show gap'); tier = Number(f.gap) >= 100 ? 3 : 2; brief = n(f.gap) + '-show bustout'; }
+    // The gap being ended counts tonight's show, as phish.net's setlist does.
+    var showdate = e.showdate || (live.entries && live.entries.length ? live.entries[0].showdate : null);
+    var gap = f && LE ? LE.gapTonight(f.gap, f.last_played, showdate) : null;
+    if (gap >= 50) { parts.push('<b class="bo">bustout</b> first since ' + fmtDate(f.last_played) + ', ' + n(gap) + '-show gap'); tier = gap >= 100 ? 3 : 2; brief = n(gap) + '-show bustout'; }
     else if (f && Number(f.times_played) <= 3) { parts.push(P.ordinal(Number(f.times_played) + 1) + ' performance ever'); tier = 2; brief = P.ordinal(Number(f.times_played) + 1) + ' performance ever'; }
     var secs = e.official_seconds || e.approx_seconds || (elapsedMs ? elapsedMs / 1000 : 0);
     var L = liveFacts.lengths[s.id];
@@ -326,8 +329,21 @@
       return applyPosts();
     }).catch(function (e) { live.error = e; live.fetchedAt = new Date(); }).then(afterLive);
   }
+  // A show under way that the stats do not have yet, and whether this song
+  // has been played in it. Null once the show is on file (or with no show).
+  function tonightFor(core) {
+    var es = live.entries || [];
+    if (!core || !es.length || !(es[0].showdate > core.latest_show)) return null;
+    var k = bskyKey(core.song);
+    return { showdate: es[0].showdate, played: es.some(function (e) { return bskyKey(e.song) === k; }) };
+  }
+  function tonightKey(t) { return t ? t.showdate + (t.played ? ':played' : '') : ''; }
+  var renderedTonight = '';
   function afterLive() {
       renderLive();
+      // The song card's gap and badges depend on whether the song has been
+      // played tonight, so a post that changes that re-renders it.
+      if (lastRender && tonightKey(tonightFor(lastRender[0][0])) !== renderedTonight) { render(lastRender[0][0], lastRender[1], lastRender[2], lastRender[3]); return; }
       // The venue section depends on tonight's location, so re-render the
       // song card once the feed has arrived (only when it changes anything).
       if (lastRender && !pickedVenueId) {
@@ -522,6 +538,9 @@
     ws.onmessage = function (ev) {
       try {
         var m = JSON.parse(ev.data);
+        // The subscription asks for one account; a message from any other is
+        // not taken on the server's word.
+        if (m.did !== PHISH_DID) return;
         // A new top-level post goes straight into the setlist from the socket
         // (replies are not setlist posts; the feed filters them too). The feed
         // fetch a few seconds later reconciles: deletes, and anything missed.
@@ -554,21 +573,25 @@
   // Badges are the point of the page: a fan mid-show wants "is this a big
   // deal?" before any table. Thresholds follow common phish.net usage: a gap
   // of 50+ shows is a bustout, 100+ is a major one, 250+ is historic.
-  function badges(core, hist, thisYear, twoYear, jamCount) {
+  function badges(core, hist, thisYear, twoYear, jamCount, endedGap) {
     var b = [];
     var gap = Number(core.gap || 0);
     var lastPlayed = core.last_played;
     var yrs = yearsBetween(lastPlayed, core.latest_show);
     var yrsTxt = yrs != null && yrs >= 1 ? ' · ' + (Math.round(yrs * 10) / 10) + ' years' : '';
+    // The next show it is played at ends a gap one longer than the shows
+    // since: that show counts, as on phish.net's setlists. endedGap is that
+    // figure for a song already played tonight (see render).
+    var next = gap + 1;
+    var size = function (g) { return g >= 250 ? 'Historic bustout' : g >= 100 ? 'Major bustout' : 'Bustout'; };
 
-    if (core.times_played <= 1) {
+    if (core.times_played <= 1 && endedGap == null) {
       b.push({ cls: 'gold', text: core.times_played === 0 ? 'Never played' : 'Played once', sub: lastPlayed ? 'on ' + longDate(lastPlayed) : '' });
-    } else if (gap >= 250) {
-      b.push({ cls: 'hot', text: 'Historic bustout if played tonight', sub: n(gap) + ' shows since ' + longDate(lastPlayed) + yrsTxt });
-    } else if (gap >= 100) {
-      b.push({ cls: 'hot', text: 'Major bustout if played tonight', sub: n(gap) + ' shows since ' + longDate(lastPlayed) + yrsTxt });
-    } else if (gap >= 50) {
-      b.push({ cls: 'hot', text: 'Bustout if played tonight', sub: n(gap) + ' shows since ' + longDate(lastPlayed) + yrsTxt });
+    } else if (endedGap != null) {
+      if (endedGap >= 50) b.push({ cls: 'hot', text: size(endedGap) + ' tonight', sub: n(endedGap) + '-show gap, first since ' + longDate(lastPlayed) + yrsTxt });
+      else b.push({ cls: 'green', text: 'Played tonight', sub: lastPlayed ? n(endedGap) + '-show gap, last on ' + longDate(lastPlayed) : '' });
+    } else if (next >= 50) {
+      b.push({ cls: 'hot', text: size(next) + ' if played tonight', sub: n(gap) + ' shows since ' + longDate(lastPlayed) + yrsTxt });
     } else if (gap >= 20) {
       b.push({ cls: 'gold', text: 'Overdue', sub: n(gap) + ' shows since ' + longDate(lastPlayed) });
     }
@@ -719,7 +742,13 @@
     // "1 in N shows everywhere" counts only shows since the song existed.
     var debutYear = yearOf(core.debut) || 0;
     showsSinceDebut = shows.reduce(function (a, r) { return a + (r.year >= debutYear ? r.n : 0); }, 0);
-    var b = badges(core, hist, thisYear, twoYear, jams.length);
+    // Played tonight, in a show the stats do not have yet: the gap it ended
+    // counts tonight's show, as phish.net's setlist does (99 going in is a
+    // 100-show gap). The catalog catches up within the hour after the recap.
+    var tonight = tonightFor(core);
+    renderedTonight = tonightKey(tonight);
+    var endedGap = tonight && tonight.played && LE ? LE.gapTonight(core.gap, core.last_played, tonight.showdate) : null;
+    var b = badges(core, hist, thisYear, twoYear, jams.length, endedGap);
     var venue = currentVenue(core);
     var vs = venue ? venueStats(core, hist, venue) : null;
     if (vs) {
@@ -732,7 +761,8 @@
         b.push({ cls: 'cool', text: 'Already played this run', sub: vs.thisRun.map(function (h) { return fmtDate(h.showdate); }).join(', ') });
       }
     }
-    var gapHot = Number(core.gap) >= 50;
+    var shownGap = endedGap != null ? endedGap : Number(core.gap);
+    var gapHot = shownGap >= 50;
 
     // History strip: every year from debut to the latest show, bar height =
     // plays that year relative to the song's busiest year. Years Phish did
@@ -751,7 +781,7 @@
       return '<div class="bar ' + cls + '" tabindex="0" aria-label="' + esc(tip) + '"><i style="height:' + Math.max(p ? 6 : 0, Math.round(100 * p / peak)) + '%"></i><span class="tip">' + esc(tip) + '</span></div>';
     }).join('');
 
-    var gapSub = gapHot ? 'since ' + shortMonth(core.last_played) : 'avg ' + (avgGap != null ? n(avgGap) : '–');
+    var gapSub = endedGap != null ? 'ended tonight' : gapHot ? 'since ' + shortMonth(core.last_played) : 'avg ' + (avgGap != null ? n(avgGap) : '–');
 
     var html =
       '<article class="song">' +
@@ -765,7 +795,7 @@
         return '<span class="badge ' + x.cls + '"><span class="dot"></span>' + esc(x.text) + (x.sub ? ' <small>' + esc(x.sub) + '</small>' : '') + '</span>';
       }).join('') + '</div>' : '') +
       '<div class="lead">' +
-        '<div class="cell"><div class="num' + (gapHot ? ' hot' : '') + '">' + n(core.gap) + '</div><div class="lab">Gap</div><div class="sub">' + esc(gapSub) + '</div></div>' +
+        '<div class="cell"><div class="num' + (gapHot ? ' hot' : '') + '">' + n(shownGap) + '</div><div class="lab">Gap</div><div class="sub">' + esc(gapSub) + '</div></div>' +
         '<div class="cell"><div class="num">' + n(core.times_played) + '</div><div class="lab">Played</div><div class="sub">since ' + (yearOf(core.debut) || '–') + '</div></div>' +
         '<div class="cell"><div class="num">' + n(thisYear) + '</div><div class="lab">' + esc(String(latestYear)) + '</div><div class="sub">of ' + n(core.shows_this_year) + ' shows</div></div>' +
       '</div>' +

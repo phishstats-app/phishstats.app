@@ -5,8 +5,16 @@ name: Backups
 # backups; before the run, scripts/rotate-backups.js deletes all but each
 # server's newest, so the run always has room. Sunday 13:17 UTC is the slot;
 # Monday 07:17 UTC is a retry in case GitHub delays or drops a scheduled run
-# (both are no-ops once the rotation is done). A manual run defaults to a dry
+# (both are no-ops once the rotation is done). GitHub starts scheduled runs
+# late, sometimes by hours: a run that starts after Monday's backup keeps last
+# week's too (see scripts/rotate-backups.js). A manual run defaults to a dry
 # run, which lists what it would delete and deletes nothing.
+#
+# A scheduled run that finishes pings a heartbeat, when the environment has
+# HEARTBEAT_URL, and reports a failure to it. The monitor behind it expects a
+# ping every week, so a schedule that GitHub has stopped running (it disables
+# schedules in a public repository after 60 days without activity) raises an
+# incident instead of passing unnoticed.
 on:
   schedule:
     - cron: '17 13 * * 0'
@@ -39,7 +47,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
       - name: Test the rotation
@@ -82,3 +90,12 @@ jobs:
       - name: Remove the key
         if: always()
         run: rm -f "$RUNNER_TEMP/oci.pem" "$RUNNER_TEMP/oci.cfg"
+      - name: Heartbeat
+        if: always() && github.event_name == 'schedule'
+        env:
+          HEARTBEAT_URL: ${{ secrets.HEARTBEAT_URL }}
+          OUTCOME: ${{ job.status }}
+        run: |
+          if [ -z "$HEARTBEAT_URL" ]; then echo 'no heartbeat configured'; exit 0; fi
+          if [ "$OUTCOME" = "success" ]; then suffix=''; else suffix='/fail'; fi
+          curl -fsS -m 10 --retry 3 -o /dev/null "${HEARTBEAT_URL}${suffix}" && echo "heartbeat sent (${OUTCOME})"

@@ -20,6 +20,10 @@
 //   - only SCHEDULED backups are touched; a manual or FAULTY one is reported
 //     and left for a person;
 //   - nothing younger than seven days is deleted;
+//   - once this week's backup exists (a server's newest is under five days
+//     old) last week's is kept too: GitHub can start a scheduled run hours
+//     late, and a retry that lands after Monday's backup must not take a
+//     server down to one. Such a server needs no slot until next week;
 //   - when the next run would still not fit afterwards, exit 2 so the
 //     workflow fails and GitHub sends mail.
 // The output names backups by display name and date only: the run log of a
@@ -28,6 +32,9 @@ const { spawnSync } = require('node:child_process');
 
 const SLOTS = 5;
 const MIN_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+// A newest backup younger than this is this week's: the policy has already
+// run. The Sunday slot sees a newest of six days, well clear of it.
+const FRESH_MS = 5 * 24 * 60 * 60 * 1000;
 const HELD_STATES = new Set(['AVAILABLE', 'CREATING', 'REQUEST_RECEIVED']);
 
 // The server a scheduled backup belongs to: OCI names it "Auto-backup for
@@ -62,18 +69,28 @@ function plan(backups, { now, servers = 2 }) {
   if (groups.size < servers) notes.push(`${servers - groups.size} server(s) have no scheduled backup`);
 
   const deletions = [];
+  let fresh = 0;
   for (const [server, mine] of [...groups].sort(([a], [b]) => a.localeCompare(b))) {
     mine.sort((a, b) => Date.parse(a['time-created']) - Date.parse(b['time-created']));
-    for (const b of mine.slice(0, -1)) {
+    const thisWeekTaken = now - Date.parse(mine[mine.length - 1]['time-created']) < FRESH_MS;
+    if (thisWeekTaken) fresh += 1;
+    const older = mine.slice(0, -1);
+    older.forEach((b, i) => {
       if (now - Date.parse(b['time-created']) < MIN_AGE_MS) {
         notes.push(`${server}: under seven days old, kept: ${label(b)}`);
-        continue;
+        return;
+      }
+      if (thisWeekTaken && i === older.length - 1) {
+        notes.push(`${server}: this week's backup is taken, last week's kept: ${label(b)}`);
+        return;
       }
       deletions.push(b);
-    }
+    });
   }
   const heldAfter = held.length - deletions.length;
-  return { deletions, notes, heldAfter, needed: heldAfter + servers };
+  // A server that already has this week's backup takes no slot at the next run
+  // this rotation is making room for.
+  return { deletions, notes, heldAfter, needed: heldAfter + Math.max(0, servers - fresh) };
 }
 
 // OCI_CLI names the executable when `oci` is not one spawnSync can start

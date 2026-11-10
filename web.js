@@ -350,6 +350,12 @@ function main() {
   const db = openDb(dbPath, { cacheMs });
   const build = readBuild(__dirname);
   const server = createWebServer({ db, rootDir: __dirname, build });
+  // The proxy in front keeps idle upstream connections for two minutes; Node
+  // closes them after five seconds by default, and a request sent down a
+  // connection Node has just closed comes back from the proxy as a 502. Hold
+  // them a little longer than the proxy does (headersTimeout must exceed it).
+  server.keepAliveTimeout = 125 * 1000;
+  server.headersTimeout = 130 * 1000;
   // Warm after the socket is open, not before: a visitor during the warm-up
   // waits for one statement at most, where a warm-up before listen() would
   // have had them refused for the whole of it.

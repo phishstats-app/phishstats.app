@@ -153,8 +153,39 @@ test('arguments: the compartment is required, the server count is a positive int
   assert.deepEqual(parseArgs(['--compartment-id', 'c', '--dry-run']), { servers: 2, dryRun: true, compartmentId: 'c' });
 });
 
-test('the plan alone: two pairs held midweek need four for the run', () => {
+test('the plan alone: two pairs held midweek stay, and nothing more is needed yet', () => {
   const r = plan([auto('web-a', '2026-10-12'), auto('web-b', '2026-10-12'), auto('web-a', '2026-10-19'), auto('web-b', '2026-10-19')], { now: SUNDAY - 4 * DAY });
-  assert.equal(r.deletions.length, 2);
+  assert.equal(r.deletions.length, 0);
   assert.equal(r.needed, 4);
+});
+
+test('a retry that starts after Monday\'s backup keeps last week\'s pair', () => {
+  // 2026-11-09 replayed: the 07:17 UTC retry ran at 17:35, after the 13:00 backup.
+  const late = Date.parse('2026-11-09T17:35:00Z');
+  const { code, removed, lines } = run([
+    auto('web-a', '2026-11-02'), auto('web-b', '2026-11-02'),
+    auto('web-a', '2026-11-09'), auto('web-b', '2026-11-09'),
+  ], undefined, late);
+  assert.equal(code, 0);
+  assert.deepEqual(removed, []);
+  assert.equal(lines.filter((l) => l.includes("this week's backup is taken, last week's kept")).length, 2);
+  assert.ok(lines.includes('after rotation: 4 held; the next run needs 4 of 5'));
+});
+
+test('a late retry still clears a third, older backup', () => {
+  const late = Date.parse('2026-11-09T17:35:00Z');
+  const { removed } = run([
+    auto('web-a', '2026-10-26'), auto('web-a', '2026-11-02'), auto('web-a', '2026-11-09'),
+    auto('web-b', '2026-11-02'), auto('web-b', '2026-11-09'),
+  ], undefined, late);
+  assert.deepEqual(removed, ['backup-web-a-2026-10-26']);
+});
+
+test('the Sunday slot, however late on Sunday, is not mistaken for a run after the backup', () => {
+  const lateSunday = Date.parse('2026-11-08T23:50:00Z');
+  const { removed } = run([
+    auto('web-a', '2026-10-26'), auto('web-b', '2026-10-26'),
+    auto('web-a', '2026-11-02'), auto('web-b', '2026-11-02'),
+  ], undefined, lateSunday);
+  assert.deepEqual(removed.sort(), ['backup-web-a-2026-10-26', 'backup-web-b-2026-10-26']);
 });

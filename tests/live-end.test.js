@@ -11,6 +11,19 @@ const S = new Date('2026-10-03T23:38:00Z'); // set 1 start
 const at = (min) => new Date(S.getTime() + min * MIN);
 const fig1 = { p10: 74 * 60, p25: 79 * 60, median: 83 * 60, p75: 88 * 60, p90: 91 * 60 };
 
+test('a song played tonight counts tonight\'s show in its gap, as the phish.net setlist does', () => {
+  // 2026-10-09 replayed: Your Pet Cat, last played 2024-08-16, 99 shows since
+  // going in. phish.net's setlist for the night called it a 100-show gap.
+  assert.equal(L.gapTonight(99, '2024-08-16', '2026-10-09'), 100);
+  assert.equal(L.gapTonight('49', '2025-07-04', '2026-10-09'), 50, 'the catalog hands gaps over as text or numbers');
+  assert.equal(L.gapTonight(0, '2026-10-08', '2026-10-09'), 1, 'played last night too');
+  // Once the show is on file the catalog says it was last played tonight and
+  // its gap is 0: the gap that ended tonight is no longer the catalog's to give.
+  assert.equal(L.gapTonight(0, '2026-10-09', '2026-10-09'), null);
+  assert.equal(L.gapTonight(null, null, '2026-10-09'), null, 'no catalog gap, nothing to say');
+  assert.equal(L.gapTonight(99, '2024-08-16', null), null, 'no show tonight');
+});
+
 test('figures come from the endpoint when there are enough sets, else the built-in defaults', () => {
   const rows = [{ set_label: '1', n: 12, p10: 1, p25: 2, median: 3, p75: 4, p90: 5 }, { set_label: '2', n: 3, p10: 1, p25: 2, median: 3, p75: 4, p90: 5 }];
   assert.deepEqual(L.setFigures(rows, '1'), { p10: 1, p25: 2, median: 3, p75: 4, p90: 5 });
