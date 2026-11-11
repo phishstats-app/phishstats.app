@@ -89,7 +89,7 @@ test('the page CSP names only the outside hosts the browser talks to, and closes
     const csp = res.headers.get('content-security-policy');
     assert.deepEqual(directive(csp, 'default-src'), new Set(["'self'"]));
     assert.deepEqual(directive(csp, 'connect-src'), new Set(["'self'",
-      'https://public.api.bsky.app', 'wss://*.bsky.network',
+      'https://public.api.bsky.app', 'wss://jetstream2.us-east.bsky.network',
       'https://api.open-meteo.com', 'https://geocoding-api.open-meteo.com']));
     assert.deepEqual(directive(csp, 'object-src'), new Set(["'none'"]));
     assert.deepEqual(directive(csp, 'base-uri'), new Set(["'none'"]));
@@ -111,4 +111,24 @@ test('pages, data, assets and 404s all say nosniff; pages also deny framing and 
     const data = await get(base, '/api/landing/latest');
     assert.equal(data.headers.get('content-security-policy'), null);
   });
+});
+
+test('every WebSocket a page or asset opens is named in the CSP, with no wildcard host', () => {
+  // The CSP used to allow wss://*.bsky.network. It now names the one Jetstream
+  // instance in use, so a page pointed at another instance without the CSP
+  // being told would be blocked in the browser and pass every other test.
+  const fs = require('node:fs');
+  const { CONNECT_HOSTS } = require('../lib/web/csp');
+  for (const host of CONNECT_HOSTS) assert.ok(!host.includes('*'), `${host} is a wildcard`);
+  const dirs = [path.join(ROOT, 'templates', 'pages'), path.join(ROOT, 'assets')];
+  const opened = new Set();
+  for (const dir of dirs) {
+    for (const name of fs.readdirSync(dir)) {
+      if (!/\.(html|js)$/.test(name)) continue;
+      const text = fs.readFileSync(path.join(dir, name), 'utf8');
+      for (const m of text.matchAll(/wss:\/\/[A-Za-z0-9.-]+/g)) opened.add(m[0]);
+    }
+  }
+  assert.ok(opened.size > 0, 'the live panel opens a WebSocket');
+  for (const origin of opened) assert.ok(CONNECT_HOSTS.includes(origin), `${origin} is opened but not in connect-src`);
 });

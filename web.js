@@ -133,10 +133,26 @@ function sendHtml(res, page, method, ifNoneMatch) {
 // night's LivePhish release kept the empty answer for an hour after the
 // times arrived (2026-10-03); the morning's new show waited the same way.
 // Errors are never held.
-function sendJson(res, status, value, method, ifNoneMatch) {
+//
+// An answer that came out of the statement cache is the same frozen array for
+// every caller until the cache lets go of it, so its bytes and its tag are
+// worked out once and kept beside it (a WeakMap: they go when the rows do).
+// Before this every request re-serialised and re-hashed the rows, cache hit
+// or not - for the larger answers, most of what a hit cost.
+const serialised = new WeakMap();
+function bodyAndTag(value) {
+  const keep = value !== null && typeof value === 'object' && Object.isFrozen(value);
+  const known = keep ? serialised.get(value) : undefined;
+  if (known) return known;
   const body = JSON.stringify(value);
-  if (status !== 200) return send(res, status, { 'Content-Type': JSON_TYPE, 'Cache-Control': 'no-store' }, body, method);
-  const etag = '"' + crypto.createHash('sha1').update(body).digest('hex') + '"';
+  const made = { body, etag: '"' + crypto.createHash('sha1').update(body).digest('hex') + '"' };
+  if (keep) serialised.set(value, made);
+  return made;
+}
+
+function sendJson(res, status, value, method, ifNoneMatch) {
+  if (status !== 200) return send(res, status, { 'Content-Type': JSON_TYPE, 'Cache-Control': 'no-store' }, JSON.stringify(value), method);
+  const { body, etag } = bodyAndTag(value);
   if (etagMatches(ifNoneMatch, etag)) return send(res, 304, { ETag: etag, 'Cache-Control': 'private, no-cache' }, undefined, method);
   return send(res, 200, { 'Content-Type': JSON_TYPE, 'Cache-Control': 'private, no-cache', ETag: etag }, body, method);
 }
@@ -147,6 +163,31 @@ const notFound = (res, method) =>
 
 const redirect = (res, location, method) =>
   send(res, 302, { Location: location, 'Cache-Control': 'no-store' }, '', method);
+
+// The two files a crawler or a researcher asks a site for by convention.
+//
+// robots.txt: the pages are for anyone, crawlers included. The data endpoints
+// are not pages (they are private, no-cache JSON a page reads), and each
+// uncached one costs the single thread up to half a second, so they are not
+// for crawling; nor is /show/random, which answers differently every time.
+const ROBOTS = 'User-agent: *\nDisallow: /api/\nDisallow: /show/random\n';
+const PLAIN = 'text/plain; charset=utf-8';
+// security.txt (RFC 9116): where to report a problem. Contact is the about
+// page's contact section, a URL rather than an address, for the same reason
+// the pages never print one. Expires is required and must be in the future;
+// it is always about six months from the day it is read, so it cannot lapse
+// on a site that goes a year without a deploy.
+const SITE = 'https://phishstats.app';
+function securityTxt(now = new Date()) {
+  const expires = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) + 180 * 24 * 3600 * 1000);
+  return [
+    `Contact: ${SITE}/about#contact`,
+    `Expires: ${expires.toISOString().replace('.000Z', 'Z')}`,
+    'Preferred-Languages: en',
+    `Canonical: ${SITE}/.well-known/security.txt`,
+    '',
+  ].join('\n');
+}
 
 // build defaults to whatever the checkout or the deploy says; the tests pass a
 // fixed one so the assertions do not depend on the state of this tree.
@@ -208,6 +249,13 @@ function createWebServer({ db, rootDir = __dirname, build = readBuild(rootDir) }
           return send(res, 304, { ETag: asset.headers.ETag, 'Cache-Control': asset.headers['Cache-Control'] }, undefined, method);
         }
         return send(res, asset.status, asset.headers, asset.body, method);
+      }
+
+      if (pathname === '/robots.txt') {
+        return send(res, 200, { 'Content-Type': PLAIN, 'Cache-Control': 'public, max-age=86400' }, ROBOTS, method);
+      }
+      if (pathname === '/.well-known/security.txt') {
+        return send(res, 200, { 'Content-Type': PLAIN, 'Cache-Control': 'public, max-age=86400' }, securityTxt(), method);
       }
 
       // ---- pages ----------------------------------------------------------
@@ -377,4 +425,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { createWebServer, serverConfig, installReloadHandler };
+module.exports = { createWebServer, serverConfig, installReloadHandler, securityTxt, bodyAndTag };

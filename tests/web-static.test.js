@@ -88,3 +88,15 @@ test('a missing asset is a plain 404, not an error', () => {
   assert.equal(res.status, 404);
   assert.equal(res.body, 'Not found');
 });
+
+test('fonts are kept for a month and images for a day; scripts and styles keep ten minutes', () => {
+  // A font file is named for what it holds and never edited in place, and at
+  // ten minutes every later visit revalidated all eight for eight 304s.
+  assert.equal(get('/assets/fonts/worksans-400-600-latin.woff2').headers['Cache-Control'], 'public, max-age=2592000');
+  assert.equal(get('/assets/icon.svg').headers['Cache-Control'], 'public, max-age=86400');
+  assert.equal(get('/assets/icon-32.png').headers['Cache-Control'], 'public, max-age=86400');
+  assert.equal(get('/assets/app.js').headers['Cache-Control'], 'public, max-age=600');
+  assert.equal(get('/assets/manifest.json').headers['Cache-Control'], 'public, max-age=600');
+  // Every one still carries an ETag, so the life ends in a 304.
+  assert.match(get('/assets/fonts/worksans-400-600-latin.woff2').headers.ETag, /^"[0-9a-f]{16,}"$/);
+});

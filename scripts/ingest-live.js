@@ -16,12 +16,15 @@ const { createRunLog, pruneOldLogs } = require('../lib/log');
 const { syncScheduledShows, syncRecappedShows, recordSyncState, recordSyncValue, contentFingerprint } = require('../lib/sync');
 const { createClient } = require('../lib/phishnet-client');
 const { loadApiKey } = require('../lib/apikey');
-const { withTimeout } = require('../lib/http');
+const { withTimeout, withMaxBytes } = require('../lib/http');
 
 // Every outside call is bounded, since the job holds the database lock while
 // it runs (lib/http.js). phish.in's gateway can take a minute on a heavy page.
-const quickFetch = withTimeout(fetch, 30 * 1000);
-const phishinFetch = withTimeout(fetch, 90 * 1000);
+// And every answer has a size limit: the jobs run in 1 GB of memory, and the
+// largest real answer (a year of phish.net setlists) is a few megabytes.
+const MAX_BYTES = 32 * 1024 * 1024;
+const quickFetch = withMaxBytes(withTimeout(fetch, 30 * 1000), MAX_BYTES);
+const phishinFetch = withMaxBytes(withTimeout(fetch, 90 * 1000), MAX_BYTES);
 
 const ROOT = path.join(__dirname, '..');
 const DB_PATH = process.env.PHISH_DB_PATH || path.join(ROOT, 'data', 'phish.db');

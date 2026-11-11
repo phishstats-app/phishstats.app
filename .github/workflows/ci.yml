@@ -52,9 +52,29 @@ jobs:
           ssh-keygen -Y verify -f deploy/allowed_signers -I phish-ci -n phish-app \
             -s "$RUNNER_TEMP/build/app.tgz.sig" < "$RUNNER_TEMP/build/app.tgz"
       - name: Attest build provenance
+        id: attest
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: ${{ runner.temp }}/build/app.tgz
+      # The attestation travels with the release as a file, so the servers can
+      # check that this workflow, on main, built the tarball, without holding
+      # a GitHub credential to ask the API for it.
+      - name: Keep the attestation bundle beside the tarball
+        run: cp "${{ steps.attest.outputs.bundle-path }}" "$RUNNER_TEMP/build/app.tgz.sigstore.json"
+      # The same check the servers will make. Not yet a gate: it reports, and
+      # becomes one once it has been seen to pass here.
+      - name: Check the bundle the way the servers will
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh --version
+          gh attestation verify "$RUNNER_TEMP/build/app.tgz" \
+            --repo "$GITHUB_REPOSITORY" \
+            --bundle "$RUNNER_TEMP/build/app.tgz.sigstore.json" \
+            --cert-identity "https://github.com/$GITHUB_REPOSITORY/.github/workflows/ci.yml@refs/heads/main" \
+            --source-ref refs/heads/main \
+            --deny-self-hosted-runners
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -65,7 +85,7 @@ jobs:
           # still uploading; publishing flips it to "latest" in one step.
           gh release create "$tag" --draft --target "$GITHUB_SHA" --title "$tag" \
             --notes "$(printf 'Built from %s.\n\n```\n%s\n```\n' "$GITHUB_SHA" "$(cat "$RUNNER_TEMP/build.txt")")" \
-            "$RUNNER_TEMP/build/app.tgz" "$RUNNER_TEMP/build/app.tgz.sig"
+            "$RUNNER_TEMP/build/app.tgz" "$RUNNER_TEMP/build/app.tgz.sig" "$RUNNER_TEMP/build/app.tgz.sigstore.json"
           gh release edit "$tag" --draft=false --latest
           # Keep the newest thirty; the tags go with the releases.
           gh release list --limit 200 --json tagName,isDraft --jq '.[] | select(.isDraft | not) | .tagName' \

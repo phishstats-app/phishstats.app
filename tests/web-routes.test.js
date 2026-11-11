@@ -319,3 +319,59 @@ test('a year page is served, and hiatus years are 404', async () => {
     }
   });
 });
+
+test('robots.txt keeps crawlers off the data endpoints and the random show', async () => {
+  await withServer(async (base) => {
+    const res = await get(base, '/robots.txt');
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get('content-type'), /^text\/plain/);
+    const body = await res.text();
+    assert.match(body, /^User-agent: \*$/m);
+    assert.match(body, /^Disallow: \/api\/$/m);
+    assert.match(body, /^Disallow: \/show\/random$/m);
+    assert.doesNotMatch(body, /^Disallow: \/$/m, 'the pages stay open');
+  });
+});
+
+test('security.txt names a contact page, never an address, and an expiry that is always ahead', async () => {
+  const { securityTxt } = require('../web');
+  await withServer(async (base) => {
+    const res = await get(base, '/.well-known/security.txt');
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get('content-type'), /^text\/plain/);
+    const body = await res.text();
+    assert.match(body, /^Contact: https:\/\/phishstats\.app\/about#contact$/m);
+    assert.match(body, /^Canonical: https:\/\/phishstats\.app\/\.well-known\/security\.txt$/m);
+    assert.doesNotMatch(body, /@|mailto:/, 'no address in the file');
+    const expires = new Date(/^Expires: (.+)$/m.exec(body)[1]);
+    const days = (expires - Date.now()) / 86400000;
+    assert.ok(days > 170 && days <= 180, `expires in ${days} days`);
+    // The about page really has the section the file points at.
+    assert.match(await (await get(base, '/about')).text(), /id="contact"/);
+  });
+  // The same rule years from now, with no deploy in between.
+  const later = securityTxt(new Date('2031-03-05T12:00:00Z'));
+  assert.match(later, /^Expires: 2031-09-01T00:00:00Z$/m);
+});
+
+test('a cached answer is serialised once: the same bytes and tag, and a 304 for the tag', async () => {
+  const { bodyAndTag } = require('../web');
+  // Frozen rows (what the statement cache hands out) are kept; anything else is not.
+  const rows = Object.freeze([Object.freeze({ a: 1 })]);
+  const first = bodyAndTag(rows);
+  assert.equal(bodyAndTag(rows), first, 'the second call returns the kept pair');
+  assert.equal(first.body, '[{"a":1}]');
+  const loose = [{ a: 1 }];
+  assert.notEqual(bodyAndTag(loose), bodyAndTag(loose), 'an unfrozen value is worked out each time');
+  assert.equal(bodyAndTag(loose).etag, first.etag, 'and comes to the same tag');
+
+  await withServer(async (base) => {
+    const one = await get(base, '/api/landing/latest');
+    const two = await get(base, '/api/landing/latest');
+    assert.equal(one.status, 200);
+    assert.equal(two.headers.get('etag'), one.headers.get('etag'));
+    assert.equal(await two.text(), await one.text());
+    const again = await fetch(base + '/api/landing/latest', { headers: { 'If-None-Match': one.headers.get('etag') } });
+    assert.equal(again.status, 304);
+  });
+});

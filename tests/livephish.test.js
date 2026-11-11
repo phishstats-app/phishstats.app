@@ -165,3 +165,46 @@ test('rematchUnmatched decodes stored entities and retries against the catalog',
   assert.equal(row.songid, 9);
   db.close();
 });
+
+// The link comes out of a social post. Each hop is checked, not followed.
+const { fetchPage } = require('../lib/livephish');
+const hop = (location) => ({ ok: false, status: 302, headers: new Headers({ location }) });
+const page = (url) => ({ ok: true, status: 200, url, headers: new Headers(), text: async () => PAGE });
+
+test('the short link is followed to LivePhish, one checked hop at a time', async () => {
+  const asked = [];
+  const got = await fetchPage(async (url, opts) => {
+    asked.push([url, opts.redirect]);
+    return url === 'https://livephi.sh/ph260905' ? hop('https://www.livephish.com/LP-2769.html') : page(url);
+  }, 'https://livephi.sh/ph260905');
+  assert.deepEqual(asked, [['https://livephi.sh/ph260905', 'manual'], ['https://www.livephish.com/LP-2769.html', 'manual']]);
+  assert.equal(got.finalUrl, 'https://www.livephish.com/LP-2769.html');
+  assert.ok(got.html.length > 0);
+});
+
+test('a redirect to any other host, or off https, is refused without being fetched', async () => {
+  for (const target of ['https://example.com/x', 'http://169.254.169.254/opc/v2/instance/', 'https://livephish.com.evil.example/x',
+    'http://www.livephish.com/LP-1.html', 'file:///etc/passwd', '//evil.example/x']) {
+    const asked = [];
+    await assert.rejects(fetchPage(async (url) => { asked.push(url); return hop(target); }, 'https://livephi.sh/ph260905'),
+      /LivePhish link leads somewhere else/, target);
+    assert.deepEqual(asked, ['https://livephi.sh/ph260905'], `${target} was not requested`);
+  }
+});
+
+test('a link that is not LivePhish to begin with is never requested; a plain-http one is asked for over https', async () => {
+  let asked = 0;
+  await assert.rejects(fetchPage(async () => { asked++; return page('x'); }, 'https://example.com/LP-1.html'), /leads somewhere else/);
+  assert.equal(asked, 0);
+  const urls = [];
+  await fetchPage(async (url) => { urls.push(url); return page(url); }, 'http://livephi.sh/ph260905');
+  assert.deepEqual(urls, ['https://livephi.sh/ph260905']);
+});
+
+test('a relative redirect stays on the host, and a loop gives up', async () => {
+  const got = await fetchPage(async (url) => (url.endsWith('/ph260905') ? hop('/LP-2769.html') : page(url)), 'https://www.livephish.com/ph260905');
+  assert.equal(got.finalUrl, 'https://www.livephish.com/LP-2769.html');
+  let n = 0;
+  await assert.rejects(fetchPage(async () => { n++; return hop('https://livephi.sh/again'); }, 'https://livephi.sh/ph260905'), /redirected more than 5 times/);
+  assert.equal(n, 6);
+});
