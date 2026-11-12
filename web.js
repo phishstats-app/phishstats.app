@@ -438,9 +438,11 @@ function installShutdownHandler({ server, db, log = { info: console.log, error: 
   signals = ['SIGTERM', 'SIGINT'], exit = (code) => process.exit(code), on = (s, fn) => process.on(s, fn) }) {
   let stopping = false;
   let finished = false;
+  let deadline = null;
   const finish = () => {
     if (finished) return;
     finished = true;
+    clearTimeout(deadline);
     try { db.close(); } catch { /* exiting anyway */ }
     exit(0);
   };
@@ -448,12 +450,12 @@ function installShutdownHandler({ server, db, log = { info: console.log, error: 
     if (stopping) return finish();
     stopping = true;
     log.info(`phish-web stopping on ${signal}`);
-    const deadline = setTimeout(() => {
+    deadline = setTimeout(() => {
       log.info(`phish-web still had connections open after ${graceMs} ms; closing them`);
       try { server.closeAllConnections(); } catch { /* exiting anyway */ }
       finish();
     }, graceMs);
-    server.close(() => { clearTimeout(deadline); finish(); });
+    server.close(finish);
   };
   for (const signal of signals) on(signal, () => onSignal(signal));
   return onSignal;
