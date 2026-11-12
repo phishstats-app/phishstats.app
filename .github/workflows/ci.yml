@@ -61,10 +61,9 @@ jobs:
       # a GitHub credential to ask the API for it.
       - name: Keep the attestation bundle beside the tarball
         run: cp "${{ steps.attest.outputs.bundle-path }}" "$RUNNER_TEMP/build/app.tgz.sigstore.json"
-      # The same check the servers will make. Not yet a gate: it reports, and
-      # becomes one once it has been seen to pass here.
+      # The same check the servers make before installing. If it fails here,
+      # no release is created, which is better than one every server refuses.
       - name: Check the bundle the way the servers will
-        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

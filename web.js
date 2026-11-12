@@ -25,6 +25,7 @@ const { serveAsset } = require('./lib/web/static');
 const { pageHeaders, COMMON_HEADERS } = require('./lib/web/csp');
 const { UNTOURED_ID } = require('./lib/web/params');
 const { eraByName } = require('./lib/web/eras');
+const { createRateWatch, limitFrom } = require('./lib/web/ratewatch');
 
 // Where to listen, and on which interface.
 //
@@ -45,6 +46,9 @@ function serverConfig(env = process.env) {
     // by swapping the file, which empties the cache, so their unit sets an
     // hour; the LAN instance changes the file in place and keeps the minute.
     cacheMs: cacheMsFrom(env.PHISH_CACHE_MS),
+    // The per-address, per-minute limit being trialled (lib/web/ratewatch.js).
+    // Counted and logged only: nothing is refused.
+    rateTrialLimit: limitFrom(env.PHISH_RATE_TRIAL_LIMIT),
   };
 }
 
@@ -191,7 +195,9 @@ function securityTxt(now = new Date()) {
 
 // build defaults to whatever the checkout or the deploy says; the tests pass a
 // fixed one so the assertions do not depend on the state of this tree.
-function createWebServer({ db, rootDir = __dirname, build = readBuild(rootDir) }) {
+// watch, when given, is told of every request before it is answered
+// (lib/web/ratewatch.js); it counts and never changes the answer.
+function createWebServer({ db, rootDir = __dirname, build = readBuild(rootDir), watch = null }) {
   const pages = {};
   for (const [name, html] of Object.entries(loadPages(rootDir, build))) {
     pages[name] = {
@@ -212,6 +218,8 @@ function createWebServer({ db, rootDir = __dirname, build = readBuild(rootDir) }
   }
 
   return http.createServer((req, res) => {
+    // Counting must never cost a visitor their page.
+    if (watch) { try { watch.note(req); } catch { /* counted or not, the request is served */ } }
     const method = req.method;
     if (method !== 'GET' && method !== 'HEAD') {
       return send(res, 405, { 'Content-Type': 'text/plain; charset=utf-8', Allow: 'GET, HEAD' },
@@ -387,7 +395,7 @@ function installReloadHandler({ db, log = { info: console.log, error: console.er
 }
 
 function main() {
-  const { host, port, dbPath, cacheMs } = serverConfig();
+  const { host, port, dbPath, cacheMs, rateTrialLimit } = serverConfig();
   const log = { info: console.log, error: console.error };
   // One read-only handle for the life of the process. Verified on 2026-09-07
   // against a WAL database written by another process: the handle sees every
@@ -397,7 +405,8 @@ function main() {
   // handle is reopened in place - see installReloadHandler above.
   const db = openDb(dbPath, { cacheMs });
   const build = readBuild(__dirname);
-  const server = createWebServer({ db, rootDir: __dirname, build });
+  const watch = createRateWatch({ limit: rateTrialLimit, log: log.info });
+  const server = createWebServer({ db, rootDir: __dirname, build, watch });
   // The proxy in front keeps idle upstream connections for two minutes; Node
   // closes them after five seconds by default, and a request sent down a
   // connection Node has just closed comes back from the proxy as a 502. Hold

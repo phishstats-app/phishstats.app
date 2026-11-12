@@ -58,6 +58,7 @@ Environment variables the server and scripts read:
 | `PORT` | `8001` | Port `web.js` listens on. |
 | `PHISH_DB_PATH` | `data/phish.db` | The SQLite file. `web.js` opens it read-only and reopens it on `SIGHUP`, so the file can be swapped underneath a running server. |
 | `PHISH_CACHE_MS` | `60000` | How long a statement's rows are kept before it is run again. |
+| `PHISH_RATE_TRIAL_LIMIT` | `300` | Requests per address per minute that `web.js` reports as "would have been limited". Counted and logged once a minute as a `traffic` line; nothing is refused, and no address is logged. |
 | `PHISH_LOG_DIR` | `logs` | Where the scripts write their per-run logs. |
 | `PHISH_LOG_RETENTION_DAYS` | `1095` | Logs older than this are deleted at the end of a run. |
 | `PHISHNET_API_KEY` | (none) | The Phish.net key, if not in `scripts/apikey.js`. |
