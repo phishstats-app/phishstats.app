@@ -422,16 +422,43 @@ function main() {
     warm(db, log);
   });
 
-  for (const signal of ['SIGTERM', 'SIGINT']) {
-    process.on(signal, () => {
-      server.close(() => {
-        db.close();
-        process.exit(0);
-      });
-    });
-  }
+  installShutdownHandler({ server, db, log });
+}
+
+// Stop on SIGTERM or SIGINT, and be gone within graceMs whatever is connected.
+//
+// server.close() stops accepting, closes idle connections, and then waits for
+// every connection that is not idle. Nothing bounded that wait: on 2026-11-12
+// a restart during a package upgrade sat in it until systemd gave up and
+// killed the process 90 seconds later, and for all of that time the proxy in
+// front answered 502. Requests here take milliseconds, so anything still open
+// after a few seconds is a connection that will never finish: it is closed
+// and the process exits. A second signal exits at once.
+function installShutdownHandler({ server, db, log = { info: console.log, error: console.error }, graceMs = 5000,
+  signals = ['SIGTERM', 'SIGINT'], exit = (code) => process.exit(code), on = (s, fn) => process.on(s, fn) }) {
+  let stopping = false;
+  let finished = false;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    try { db.close(); } catch { /* exiting anyway */ }
+    exit(0);
+  };
+  const onSignal = (signal) => {
+    if (stopping) return finish();
+    stopping = true;
+    log.info(`phish-web stopping on ${signal}`);
+    const deadline = setTimeout(() => {
+      log.info(`phish-web still had connections open after ${graceMs} ms; closing them`);
+      try { server.closeAllConnections(); } catch { /* exiting anyway */ }
+      finish();
+    }, graceMs);
+    server.close(() => { clearTimeout(deadline); finish(); });
+  };
+  for (const signal of signals) on(signal, () => onSignal(signal));
+  return onSignal;
 }
 
 if (require.main === module) main();
 
-module.exports = { createWebServer, serverConfig, installReloadHandler, securityTxt, bodyAndTag };
+module.exports = { createWebServer, serverConfig, installReloadHandler, installShutdownHandler, securityTxt, bodyAndTag };
