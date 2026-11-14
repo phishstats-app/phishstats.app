@@ -9,11 +9,24 @@ on:
 permissions:
   contents: read
 
+# One run per branch at a time, in order. Two pushes to main close together
+# would otherwise build two releases side by side, and the older commit could
+# be the one published last and marked latest. A run in progress is never
+# cancelled (it may be mid-release); of the runs waiting, only the newest is
+# kept, which is the one that matters.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing here pushes, so the token is not left in the checkout's
+          # git configuration for a later step to read.
+          persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
@@ -33,11 +46,15 @@ jobs:
     # cannot sign a release the servers would accept.
     environment: release
     permissions:
-      contents: write
-      id-token: write
-      attestations: write
+      contents: write      # create the release and its tag, and delete old ones
+      id-token: write      # the OIDC token the provenance attestation is signed with
+      attestations: write  # store that attestation
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The release is made with gh and GH_TOKEN below, never with git, so
+          # the write token is not left in the checkout's git configuration.
+          persist-credentials: false
       - name: Build the tarball
         run: bash scripts/build-tarball.sh "$PWD" "$RUNNER_TEMP/build" | tee "$RUNNER_TEMP/build.txt"
       - name: Sign it, and check the signature against the published key
@@ -59,8 +76,12 @@ jobs:
       # The attestation travels with the release as a file, so the servers can
       # check that this workflow, on main, built the tarball, without holding
       # a GitHub credential to ask the API for it.
+      # Values reach the shell through the environment, never by being pasted
+      # into the script text, here and in the steps below.
       - name: Keep the attestation bundle beside the tarball
-        run: cp "${{ steps.attest.outputs.bundle-path }}" "$RUNNER_TEMP/build/app.tgz.sigstore.json"
+        env:
+          BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
+        run: cp "$BUNDLE_PATH" "$RUNNER_TEMP/build/app.tgz.sigstore.json"
       # The same check the servers make before installing. If it fails here,
       # no release is created, which is better than one every server refuses.
       - name: Check the bundle the way the servers will
@@ -79,7 +100,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          tag="deploy-${{ github.run_number }}"
+          tag="deploy-$GITHUB_RUN_NUMBER"
           # Draft first so the servers never see a release whose assets are
           # still uploading; publishing flips it to "latest" in one step.
           gh release create "$tag" --draft --target "$GITHUB_SHA" --title "$tag" \
@@ -91,4 +112,4 @@ jobs:
             | tail -n +31 | while read -r old; do gh release delete "$old" --yes --cleanup-tag; done
       - name: Summary
         run: |
-          { echo "## Released deploy-${{ github.run_number }}"; echo; cat "$RUNNER_TEMP/build.txt"; } >> "$GITHUB_STEP_SUMMARY"
+          { echo "## Released deploy-$GITHUB_RUN_NUMBER"; echo; cat "$RUNNER_TEMP/build.txt"; } >> "$GITHUB_STEP_SUMMARY"

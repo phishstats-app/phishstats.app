@@ -7,6 +7,11 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    # A release must be a week old before it is proposed. A compromised
+    # release of an action is usually noticed and withdrawn within days, so
+    # the wait keeps it out of this repository. Security updates do not wait.
+    cooldown:
+      default-days: 7
     groups:
       actions:
         patterns: ["*"]
